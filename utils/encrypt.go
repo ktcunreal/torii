@@ -3,11 +3,8 @@ package utils
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"golang.org/x/crypto/nacl/secretbox"
 	"io"
-	"io/ioutil"
-	"log"
 	"net"
 	"time"
 )
@@ -46,8 +43,7 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 
 	cl, ok := Unmask(clb)
 	if !ok {
-		log.Println("INVALID CIPHER LENGTH, DEFENSE MECHANISM ACTIVATED")
-		return e.Drop()
+		return 0, nil
 	}
 
 	c := make([]byte, cl)
@@ -57,9 +53,9 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 
 	p, ok := secretbox.Open([]byte{}, c[:cl], &e.rNonce, e.key)
 	increment(&e.rNonce)
+	
 	if !ok {
-		log.Println("DECRYPT FAILED, DEFENSE MECHANISM ACTIVATED")
-		return e.Drop()
+		return 0, nil
 	}
 
 	n := copy(b, p)
@@ -73,6 +69,7 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 func (e *EncryptedStream) Write(b []byte) (int, error) {
 	c := secretbox.Seal([]byte{}, b, &e.sNonce, e.key)
 	increment(&e.sNonce)
+
 	clb := Mask(len(c))
 
 	if n, err := e.Conn.Write(clb); err != nil {
@@ -88,12 +85,6 @@ func (e *EncryptedStream) Write(b []byte) (int, error) {
 
 func (e *EncryptedStream) Close() error {
 	return e.Conn.Close()
-}
-
-func (e *EncryptedStream) Drop() (int, error) {
-	defer e.Conn.Close()
-	ioutil.ReadAll(e.Conn)
-	return 0, errors.New("ILLEGAL CONNECTION ABORTED")
 }
 
 func Mask(i int) []byte {
@@ -118,7 +109,7 @@ func Unmask(b []byte) (int, bool) {
 	if bytes.Equal(b[0:4], M.current_auth) {
 		xor = M.current_xor
 	} else if bytes.Equal(b[0:4], M.lapsed_auth) {
-		xor = M.lapsed_auth
+		xor = M.lapsed_xor
 	} else {
 		return 0, false
 	}
