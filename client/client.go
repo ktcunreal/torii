@@ -10,8 +10,6 @@ import (
 
 func main() {
 	conf := initConf()
-	utils.M.SetKey(conf.PSK[:4])
-
 	listener := initLsnr(conf.CLIENT)
 	defer listener.Close()
 

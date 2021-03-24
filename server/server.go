@@ -10,8 +10,6 @@ import (
 
 func main() {
 	conf := initConf()
-	utils.M.SetKey(conf.PSK[:4])
-
 	server := initLsnr(conf.SERVER)
 	defer server.Close()
 

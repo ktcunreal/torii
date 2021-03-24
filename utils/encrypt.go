@@ -1,17 +1,12 @@
 package utils
 
 import (
-	"bytes"
 	"encoding/binary"
 	"golang.org/x/crypto/nacl/secretbox"
 	"io"
+	"crypto/hmac"
+    "crypto/sha256"
 	"net"
-	"time"
-)
-
-var (
-	f = "200601021504"
-	M = &MaskParam{}
 )
 
 type EncryptedStream struct {
@@ -37,26 +32,25 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 	}
 
 	clb := make([]byte, 8)
-	if n, err := io.ReadFull(e.Conn, clb); err != nil {
-		return n, err
+	if _, err := io.ReadFull(e.Conn, clb); err != nil {
+		return 0, err
 	}
 
-	cl, ok := Unmask(clb)
+	cl, ok := e.Unmask(clb)
 	if !ok {
 		return 0, nil
 	}
 
 	c := make([]byte, cl)
-	if n, err := io.ReadFull(e.Conn, c); err != nil {
-		return n, err
+	if _, err := io.ReadFull(e.Conn, c); err != nil {
+		return 0, err
 	}
 
-	p, ok := secretbox.Open([]byte{}, c[:cl], &e.rNonce, e.key)
-	increment(&e.rNonce)
-	
+	p, ok := secretbox.Open([]byte{}, c, &e.rNonce, e.key)
 	if !ok {
 		return 0, nil
 	}
+	increment(&e.rNonce)
 
 	n := copy(b, p)
 	if n < len(p) {
@@ -69,53 +63,47 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 func (e *EncryptedStream) Write(b []byte) (int, error) {
 	c := secretbox.Seal([]byte{}, b, &e.sNonce, e.key)
 	increment(&e.sNonce)
+	clb := e.Mask(len(c))
 
-	clb := Mask(len(c))
-
-	if n, err := e.Conn.Write(clb); err != nil {
-		return n, err
+	n, err := e.Conn.Write(append(clb, c...))
+	if err != nil {
+		return 0, err
 	}
 
-	if n, err := e.Conn.Write(c); err != nil {
-		return n, err
-	}
-
-	return len(b), nil
+	return n, nil
 }
 
 func (e *EncryptedStream) Close() error {
 	return e.Conn.Close()
 }
 
-func Mask(i int) []byte {
-	if !bytes.Equal(M.current_ts, []byte(time.Now().Format(f))) {
-		M.Update()
-	}
+
+func (e *EncryptedStream) Mask(i int) []byte{
+	kb, ke := (*e.key)[:4], (*e.key)[28:]
 
 	i_buf := make([]byte, 4)
 	binary.LittleEndian.PutUint32(i_buf, uint32(i))
+	xi_buf := XORBytes(i_buf, kb)
 
-	xor_b := XORBytes(i_buf, M.current_xor)
-	return append(M.current_auth, xor_b...)
+	h := hmac.New(sha256.New, ke)
+	h.Write(i_buf)
+	hs256 := h.Sum(nil)[:4]
+
+	return append(xi_buf, hs256...)
 }
 
-func Unmask(b []byte) (int, bool) {
-	xor := make([]byte, 4)
+func (e* EncryptedStream) Unmask(b []byte) (int, bool) {
+	kb, ke := (*e.key)[:4], (*e.key)[28:]
 
-	if !bytes.Equal(M.current_ts, []byte(time.Now().Format(f))) {
-		M.Update()
-	}
+	xi_buf := b[:4]
+	i_buf := XORBytes(xi_buf, kb)
+	i := int(binary.LittleEndian.Uint32(i_buf))
 
-	if bytes.Equal(b[0:4], M.current_auth) {
-		xor = M.current_xor
-	} else if bytes.Equal(b[0:4], M.lapsed_auth) {
-		xor = M.lapsed_xor
-	} else {
-		return 0, false
-	}
+	h := hmac.New(sha256.New, ke)
+	h.Write(i_buf)
+	hs256 := h.Sum(nil)[:4]
 
-	i_buf := XORBytes(b[4:8], xor)
-	return int(binary.LittleEndian.Uint32(i_buf)), true
+	return i, hmac.Equal(hs256, b[4:8])
 }
 
 func XORBytes(a, b []byte) []byte {
@@ -134,3 +122,4 @@ func increment(b *[24]byte) {
 		}
 	}
 }
+
