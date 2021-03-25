@@ -1,16 +1,19 @@
 package utils
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"golang.org/x/crypto/nacl/secretbox"
+	"hash"
 	"io"
-	"crypto/hmac"
-    "crypto/sha256"
 	"net"
 )
 
 type EncryptedStream struct {
 	net.Conn
+	h, m   hash.Hash
 	rBuf   []byte
 	sNonce [24]byte
 	rNonce [24]byte
@@ -21,6 +24,8 @@ func NewEncryptedStream(conn net.Conn, key *[32]byte) *EncryptedStream {
 	return &EncryptedStream{
 		key:  key,
 		Conn: conn,
+		h:    hmac.New(sha256.New, key[:4]),
+		m:    hmac.New(sha256.New, key[28:]),
 	}
 }
 
@@ -77,33 +82,48 @@ func (e *EncryptedStream) Close() error {
 	return e.Conn.Close()
 }
 
+func (e *EncryptedStream) Mask(i int) []byte {
+	e.h.Reset()
+	e.m.Reset()
 
-func (e *EncryptedStream) Mask(i int) []byte{
-	kb, ke := (*e.key)[:4], (*e.key)[28:]
+	r := make([]byte, 2)
+	rand.Read(r[:2])
 
-	i_buf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(i_buf, uint32(i))
-	xi_buf := XORBytes(i_buf, kb)
+	e.h.Write(r)
+	e.m.Write(r)
 
-	h := hmac.New(sha256.New, ke)
-	h.Write(i_buf)
-	hs256 := h.Sum(nil)[:4]
+	rh := e.h.Sum(nil)[:2]
+	mh := e.m.Sum(nil)[:4]
 
-	return append(xi_buf, hs256...)
+	ib := make([]byte, 4)
+	binary.LittleEndian.PutUint32(ib, uint32(i))
+
+	xl := XORBytes(ib, mh)
+	rv := append(r, rh...)
+
+	return append(rv, xl...)
 }
 
-func (e* EncryptedStream) Unmask(b []byte) (int, bool) {
-	kb, ke := (*e.key)[:4], (*e.key)[28:]
+func (e *EncryptedStream) Unmask(b []byte) (int, bool) {
+	e.h.Reset()
+	e.m.Reset()
 
-	xi_buf := b[:4]
-	i_buf := XORBytes(xi_buf, kb)
-	i := int(binary.LittleEndian.Uint32(i_buf))
+	r := b[:2]
 
-	h := hmac.New(sha256.New, ke)
-	h.Write(i_buf)
-	hs256 := h.Sum(nil)[:4]
+	e.h.Write(r)
+	e.m.Write(r)
 
-	return i, hmac.Equal(hs256, b[4:8])
+	rh := e.h.Sum(nil)[:2]
+	mh := e.m.Sum(nil)[:4]
+
+	if !hmac.Equal(rh, b[2:4]) {
+		return 0, false
+	}
+
+	ib := XORBytes(b[4:8], mh)
+	i := int(binary.LittleEndian.Uint32(ib))
+
+	return i, true
 }
 
 func XORBytes(a, b []byte) []byte {
@@ -122,4 +142,3 @@ func increment(b *[24]byte) {
 		}
 	}
 }
-
