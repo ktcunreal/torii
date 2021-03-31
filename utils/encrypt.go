@@ -1,31 +1,29 @@
 package utils
 
 import (
-	"crypto/hmac"
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"golang.org/x/crypto/nacl/secretbox"
-	"hash"
 	"io"
+	"log"
 	"net"
 )
 
 type EncryptedStream struct {
 	net.Conn
-	h, m   hash.Hash
 	rBuf   []byte
 	sNonce [24]byte
 	rNonce [24]byte
-	key    *[32]byte
+	Key    *[32]byte
 }
 
 func NewEncryptedStream(conn net.Conn, key *[32]byte) *EncryptedStream {
 	return &EncryptedStream{
-		key:  key,
+		Key:  key,
 		Conn: conn,
-		h:    hmac.New(sha256.New, key[:4]),
-		m:    hmac.New(sha256.New, key[28:]),
 	}
 }
 
@@ -37,25 +35,27 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 	}
 
 	clb := make([]byte, 8)
-	if _, err := io.ReadFull(e.Conn, clb); err != nil {
-		return 0, err
+	if n, err := io.ReadFull(e.Conn, clb); err != nil {
+		return n, err
 	}
 
-	cl, ok := e.Unmask(clb)
+	cl, ok := Unmask(clb, (*e.Key)[:])
 	if !ok {
-		return 0, nil
+		log.Println("INVALID CIPHER LENGTH")
+		return e.Drop()
 	}
 
 	c := make([]byte, cl)
-	if _, err := io.ReadFull(e.Conn, c); err != nil {
-		return 0, err
+	if n, err := io.ReadFull(e.Conn, c); err != nil {
+		return n, err
 	}
 
-	p, ok := secretbox.Open([]byte{}, c, &e.rNonce, e.key)
-	if !ok {
-		return 0, nil
-	}
+	p, ok := secretbox.Open([]byte{}, c[:cl], &e.rNonce, e.Key)
 	increment(&e.rNonce)
+	if !ok {
+		log.Println("DECRYPT FAILED")
+		return e.Drop()
+	}
 
 	n := copy(b, p)
 	if n < len(p) {
@@ -66,63 +66,79 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 }
 
 func (e *EncryptedStream) Write(b []byte) (int, error) {
-	c := secretbox.Seal([]byte{}, b, &e.sNonce, e.key)
+	c := secretbox.Seal([]byte{}, b, &e.sNonce, e.Key)
 	increment(&e.sNonce)
-	clb := e.Mask(len(c))
+	clb := Mask(len(c), (*e.Key)[:])
 
-	n, err := e.Conn.Write(append(clb, c...))
-	if err != nil {
-		return 0, err
+	if n, err := e.Conn.Write(clb); err != nil {
+		return n, err
 	}
 
-	return n, nil
+	if n, err := e.Conn.Write(c); err != nil {
+		return n, err
+	}
+
+	return len(b), nil
 }
 
 func (e *EncryptedStream) Close() error {
 	return e.Conn.Close()
 }
 
-func (e *EncryptedStream) Mask(i int) []byte {
-	e.h.Reset()
-	e.m.Reset()
+func (e *EncryptedStream) Drop() (int, error) {
+	defer e.Conn.Close()
+	d := make([]byte, 16)
+	for {
+		_, err := io.ReadFull(e.Conn, d)
+		if err != nil {
+			break
+		}
+	}
+	return 0, errors.New("ILLEGAL CONNECTION ABORTED")
+}
+
+func Mask(i int, key []byte) []byte {
+	k1 := key[:4]
+	k2 := key[28:]
 
 	r := make([]byte, 2)
-	rand.Read(r[:2])
-
-	e.h.Write(r)
-	e.m.Write(r)
-
-	rh := e.h.Sum(nil)[:2]
-	mh := e.m.Sum(nil)[:4]
+	rand.Read(r)
 
 	ib := make([]byte, 4)
 	binary.LittleEndian.PutUint32(ib, uint32(i))
 
-	xl := XORBytes(ib, mh)
-	rv := append(r, rh...)
+	sb := make([]byte, 2)
+	copy(sb, r)
+	am := SH256S(append(sb, k1...))
 
-	return append(rv, xl...)
+	nc := make([]byte, 2)
+	copy(nc, r)
+	rm := SH256S(append(nc, k2...))
+
+	head := append(r, am[2:4]...)
+	tail := XORBytes(ib, rm)
+
+	return append(head, tail...)
 }
 
-func (e *EncryptedStream) Unmask(b []byte) (int, bool) {
-	e.h.Reset()
-	e.m.Reset()
+func Unmask(b []byte, key []byte) (int, bool) {
+	k1 := key[:4]
+	k2 := key[28:]
 
-	r := b[:2]
+	sb := make([]byte, 2)
+	copy(sb, b[:2])
+	am := SH256S(append(sb, k1...))
 
-	e.h.Write(r)
-	e.m.Write(r)
-
-	rh := e.h.Sum(nil)[:2]
-	mh := e.m.Sum(nil)[:4]
-
-	if !hmac.Equal(rh, b[2:4]) {
+	if !bytes.Equal(am[2:4], b[2:4]) {
 		return 0, false
 	}
 
-	ib := XORBytes(b[4:8], mh)
-	i := int(binary.LittleEndian.Uint32(ib))
+	nc := make([]byte, 2)
+	copy(nc, b[:2])
+	rm := SH256S(append(nc, k2...))
 
+	ib := XORBytes(b[4:8], rm)
+	i := int(binary.LittleEndian.Uint32(ib))
 	return i, true
 }
 
@@ -141,4 +157,9 @@ func increment(b *[24]byte) {
 			return
 		}
 	}
+}
+
+func SH256S(b []byte) []byte {
+	s := sha256.Sum256(b)
+	return s[28:]
 }
