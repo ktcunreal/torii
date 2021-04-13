@@ -33,7 +33,6 @@ func LoadSC(path string) (*Server, error) {
 }
 
 func LoadCC(path string) (*Client, error) {
-
 	client := &Client{}
 	file, err := os.Open(path)
 	if err != nil {

@@ -12,17 +12,19 @@ import (
 	"net"
 )
 
+var H1, H2 []byte
+
 type EncryptedStream struct {
 	net.Conn
 	rBuf   []byte
 	sNonce [24]byte
 	rNonce [24]byte
-	Key    *[32]byte
+	key    *[32]byte
 }
 
-func NewEncryptedStream(conn net.Conn, key *[32]byte) *EncryptedStream {
+func NewEncryptedStream(conn net.Conn, k *[32]byte) *EncryptedStream {
 	return &EncryptedStream{
-		Key:  key,
+		key:  k,
 		Conn: conn,
 	}
 }
@@ -34,12 +36,12 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 		return n, nil
 	}
 
-	clb := make([]byte, 8)
+	clb := make([]byte, 12)
 	if n, err := io.ReadFull(e.Conn, clb); err != nil {
 		return n, err
 	}
 
-	cl, ok := Unmask(clb, (*e.Key)[:])
+	cl, ok := Unmask(clb)
 	if !ok {
 		log.Println("INVALID CIPHER LENGTH")
 		return e.Drop()
@@ -50,7 +52,7 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 		return n, err
 	}
 
-	p, ok := secretbox.Open([]byte{}, c[:cl], &e.rNonce, e.Key)
+	p, ok := secretbox.Open([]byte{}, c[:cl], &e.rNonce, e.key)
 	increment(&e.rNonce)
 	if !ok {
 		log.Println("DECRYPT FAILED")
@@ -66,9 +68,9 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 }
 
 func (e *EncryptedStream) Write(b []byte) (int, error) {
-	c := secretbox.Seal([]byte{}, b, &e.sNonce, e.Key)
+	c := secretbox.Seal([]byte{}, b, &e.sNonce, e.key)
 	increment(&e.sNonce)
-	clb := Mask(len(c), (*e.Key)[:])
+	clb := Mask(len(c))
 
 	if n, err := e.Conn.Write(clb); err != nil {
 		return n, err
@@ -97,48 +99,43 @@ func (e *EncryptedStream) Drop() (int, error) {
 	return 0, errors.New("ILLEGAL CONNECTION ABORTED")
 }
 
-func Mask(i int, key []byte) []byte {
-	k1 := key[:4]
-	k2 := key[28:]
-
-	r := make([]byte, 2)
+func Mask(i int) []byte {
+	r := make([]byte, 4)
 	rand.Read(r)
 
 	ib := make([]byte, 4)
 	binary.LittleEndian.PutUint32(ib, uint32(i))
 
-	sb := make([]byte, 2)
+	sb := make([]byte, 4)
 	copy(sb, r)
-	am := SH256S(append(sb, k1...))
+	am := SH256S(append(sb, H1...))
 
-	nc := make([]byte, 2)
+	nc := make([]byte, 4)
 	copy(nc, r)
-	rm := SH256S(append(nc, k2...))
+	rm := SH256S(append(nc, H2...))
 
-	head := append(r, am[2:4]...)
-	tail := XORBytes(ib, rm)
+	header := append(r, am...)
+	l := XORBytes(ib, rm)
 
-	return append(head, tail...)
+	return append(header, l...)
 }
 
-func Unmask(b []byte, key []byte) (int, bool) {
-	k1 := key[:4]
-	k2 := key[28:]
+func Unmask(b []byte) (int, bool) {
+	sb := make([]byte, 4)
+	copy(sb, b[:4])
+	am := SH256S(append(sb, H1...))
 
-	sb := make([]byte, 2)
-	copy(sb, b[:2])
-	am := SH256S(append(sb, k1...))
-
-	if !bytes.Equal(am[2:4], b[2:4]) {
+	if !bytes.Equal(am, b[4:8]) {
 		return 0, false
 	}
 
-	nc := make([]byte, 2)
-	copy(nc, b[:2])
-	rm := SH256S(append(nc, k2...))
+	nc := make([]byte, 4)
+	copy(nc, b[:4])
+	rm := SH256S(append(nc, H2...))
 
-	ib := XORBytes(b[4:8], rm)
+	ib := XORBytes(b[8:12], rm)
 	i := int(binary.LittleEndian.Uint32(ib))
+
 	return i, true
 }
 
@@ -157,6 +154,11 @@ func increment(b *[24]byte) {
 			return
 		}
 	}
+}
+
+func SH256(b []byte) []byte {
+	s := sha256.Sum256(b)
+	return s[:]
 }
 
 func SH256S(b []byte) []byte {
