@@ -46,8 +46,8 @@ func initConf() *config.Client {
 	if err != nil {
 		log.Fatalf("LOAD CONFIGURATION ERROR: %v", err)
 	}
-	utils.H1 = utils.SH256(conf.PSK[:4])
-	utils.H2 = utils.SH256(conf.PSK[28:])
+	utils.H1 = utils.SH256(conf.PSK[:10])
+	utils.H2 = utils.SH256(conf.PSK[24:])
 	return conf
 }
 

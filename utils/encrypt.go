@@ -53,11 +53,11 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 	}
 
 	p, ok := secretbox.Open([]byte{}, c[:cl], &e.rNonce, e.key)
-	increment(&e.rNonce)
 	if !ok {
 		log.Println("DECRYPT FAILED")
 		return e.Drop()
 	}
+	increment(&e.rNonce)
 
 	n := copy(b, p)
 	if n < len(p) {
