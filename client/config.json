@@ -1,5 +1,0 @@
-{
-    "serveraddr": "localhost:1080",
-    "clientaddr": "0.0.0.0:80",
-    "key": "somerandomstuff"
-}

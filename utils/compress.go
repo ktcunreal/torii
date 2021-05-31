@@ -16,7 +16,6 @@ func (c *CompStream) Read(p []byte) (n int, err error) {
 }
 
 func (c *CompStream) Write(p []byte) (n int, err error) {
-
 	if _, err := c.w.Write(p); err != nil {
 		return 0, err
 	}

@@ -37,8 +37,9 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 	}
 
 	clb := make([]byte, 12)
-	if n, err := io.ReadFull(e.Conn, clb); err != nil {
-		return n, err
+	if _, err := io.ReadFull(e.Conn, clb); err != nil {
+		log.Println("LT 12 BYTES RECEIVED, ", err)
+		return 0, err
 	}
 
 	cl, ok := Unmask(clb)
@@ -48,8 +49,9 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 	}
 
 	c := make([]byte, cl)
-	if n, err := io.ReadFull(e.Conn, c); err != nil {
-		return n, err
+	if _, err := io.ReadFull(e.Conn, c); err != nil {
+		log.Println("READ PAYLOAD FAILED")
+		return 0, err
 	}
 
 	p, ok := secretbox.Open([]byte{}, c[:cl], &e.rNonce, e.key)
@@ -69,17 +71,13 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 
 func (e *EncryptedStream) Write(b []byte) (int, error) {
 	c := secretbox.Seal([]byte{}, b, &e.sNonce, e.key)
+	wt := make([]byte, len(c) + 12)
+	copy(wt[:12], Mask(len(c)))
+	copy(wt[12:], c)
+	if _, err := e.Conn.Write(wt); err != nil {
+		return 0, err
+	}
 	increment(&e.sNonce)
-	clb := Mask(len(c))
-
-	if n, err := e.Conn.Write(clb); err != nil {
-		return n, err
-	}
-
-	if n, err := e.Conn.Write(c); err != nil {
-		return n, err
-	}
-
 	return len(b), nil
 }
 
@@ -89,7 +87,7 @@ func (e *EncryptedStream) Close() error {
 
 func (e *EncryptedStream) Drop() (int, error) {
 	defer e.Conn.Close()
-	d := make([]byte, 16)
+	d := make([]byte, 12)
 	for {
 		_, err := io.ReadFull(e.Conn, d)
 		if err != nil {

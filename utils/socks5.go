@@ -26,24 +26,24 @@ func NewSocks5Server(conn net.Conn) *Socks5Server {
 }
 
 func (s *Socks5Server) Proxy() error {
-	if n, err := io.ReadFull(s.Conn, s.buf[:3]); err != nil || n != 3 {
+	if _, err := io.ReadFull(s.Conn, s.buf[:3]); err != nil {
 		log.Printf("UNABLE TO GET SOCKS VERSION: %v", err)
 		return s.Conn.Close()
 	}
 
-	if n, err := s.Conn.Write(s.res[:2]); n != 2 || err != nil {
+	if _, err := s.Conn.Write(s.res[:2]); err != nil {
 		log.Printf("UNABLE TO SEND AUTHENTICATION RESPONSE: %v", err)
 		return s.Conn.Close()
 	}
 
-	if n, err := io.ReadFull(s.Conn, s.buf[:4]); n != 4 || err != nil {
+	if _, err := io.ReadFull(s.Conn, s.buf[:4]); err != nil {
 		log.Printf("UNABLE TO READ CLIENT REQUEST: %v", err)
 		return s.Conn.Close()
 	}
 
 	switch s.buf[3] {
 	case 0x01:
-		if n, err := io.ReadFull(s.Conn, s.buf[:6]); n != 6 || err != nil {
+		if _, err := io.ReadFull(s.Conn, s.buf[:6]); err != nil {
 			log.Printf("UNABLE TO GET DST ADDR: %v", err)
 			return s.Conn.Close()
 		}
@@ -51,14 +51,14 @@ func (s *Socks5Server) Proxy() error {
 		s.addr = fmt.Sprintf("%s:%d", s.ip, s.port)
 
 	case 0x03:
-		if n, err := io.ReadFull(s.Conn, s.buf[:1]); n != 1 || err != nil {
+		if _, err := io.ReadFull(s.Conn, s.buf[:1]); err != nil {
 			log.Printf("UNABLE TO GET DST DOMAIN LEN: %v", err)
 			return s.Conn.Close()
 		}
 
 		l := int(s.buf[0])
-		b := make([]byte, l+2)
-		if n, err := io.ReadFull(s.Conn, b); n != l+2 || err != nil {
+		b := make([]byte, l + 2)
+		if _, err := io.ReadFull(s.Conn, b); err != nil {
 			log.Printf("UNABLE TO GET DST DOMAIN: %v", err)
 			return s.Conn.Close()
 		}
@@ -76,7 +76,7 @@ func (s *Socks5Server) Proxy() error {
 		return s.Conn.Close()
 	}
 
-	if n, err := s.Conn.Write(s.res); n != 10 || err != nil {
+	if _, err := s.Conn.Write(s.res); err != nil {
 		log.Printf("UNABLE TO WRITE RESONPSE: %v", err)
 		return s.Conn.Close()
 	}

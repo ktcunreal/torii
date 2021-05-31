@@ -19,7 +19,7 @@ func main() {
 			log.Printf("FAILED TO ACCEPT CONNECTION FROM CLIENT: %v", err)
 			continue
 		}
-		initConn(client, conf.PSK)
+		go initConn(client, conf.PSK)
 	}
 }
 
@@ -48,5 +48,5 @@ func initConf() *config.Server {
 func initConn(client net.Conn, PSK [32]byte) {
 	eConn := utils.NewEncryptedStream(client, &PSK)
 	cConn := utils.NewCompStream(eConn)
-	go utils.NewSocks5Server(cConn).Proxy()
+	utils.NewSocks5Server(cConn).Proxy()
 }

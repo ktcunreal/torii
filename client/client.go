@@ -24,8 +24,7 @@ func main() {
 			log.Println("COULD NOT CONNECT TO SERVER: ", err)
 			continue
 		}
-
-		initConn(server, client, &conf.PSK)
+		go initConn(server, client, &conf.PSK)
 	}
 }
 
@@ -54,5 +53,5 @@ func initConf() *config.Client {
 func initConn(server, client net.Conn, PSK *[32]byte) {
 	eConn := utils.NewEncryptedStream(server, PSK)
 	cConn := utils.NewCompStream(eConn)
-	go utils.Pipe(cConn, client)
+	utils.Pipe(cConn, client)
 }
