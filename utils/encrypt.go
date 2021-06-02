@@ -12,20 +12,22 @@ import (
 	"net"
 )
 
+const chunk int = 1024 * 8
 var H1, H2 []byte
 
 type EncryptedStream struct {
 	net.Conn
-	rBuf   []byte
+	rBuf, dBuf []byte
 	sNonce [24]byte
 	rNonce [24]byte
-	key    *[32]byte
+	psk    *[32]byte
 }
 
-func NewEncryptedStream(conn net.Conn, k *[32]byte) *EncryptedStream {
+func NewEncryptedStream(c net.Conn, k *[32]byte) *EncryptedStream {
 	return &EncryptedStream{
-		key:  k,
-		Conn: conn,
+		Conn: c,
+		psk:  k,
+		dBuf: make([]byte, 12),
 	}
 }
 
@@ -36,25 +38,24 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 		return n, nil
 	}
 
-	clb := make([]byte, 12)
-	if _, err := io.ReadFull(e.Conn, clb); err != nil {
+	if _, err := io.ReadFull(e.Conn, e.dBuf); err != nil {
 		log.Println("LT 12 BYTES RECEIVED, ", err)
 		return 0, err
 	}
 
-	cl, ok := Unmask(clb)
+	size, ok := Decode(e.dBuf)
 	if !ok {
 		log.Println("INVALID CIPHER LENGTH")
 		return e.Drop()
 	}
 
-	c := make([]byte, cl)
+	c := make([]byte, size)
 	if _, err := io.ReadFull(e.Conn, c); err != nil {
-		log.Println("READ PAYLOAD FAILED")
+		log.Println("ERROR READING CIPHER")
 		return 0, err
 	}
 
-	p, ok := secretbox.Open([]byte{}, c[:cl], &e.rNonce, e.key)
+	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.psk)
 	if !ok {
 		log.Println("DECRYPT FAILED")
 		return e.Drop()
@@ -70,15 +71,43 @@ func (e *EncryptedStream) Read(b []byte) (int, error) {
 }
 
 func (e *EncryptedStream) Write(b []byte) (int, error) {
-	c := secretbox.Seal([]byte{}, b, &e.sNonce, e.key)
-	wt := make([]byte, len(c) + 12)
-	copy(wt[:12], Mask(len(c)))
-	copy(wt[12:], c)
-	if _, err := e.Conn.Write(wt); err != nil {
+	sidx, eidx := 0, 0
+	for ; sidx < len(b); sidx = eidx {
+		if len(b) - eidx >= chunk {
+			eidx += chunk
+		} else {
+			eidx = len(b)
+		}
+			
+		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.psk)
+
+		wBuf := make([]byte, len(cipher) + 12)
+		eBuf := Encode(len(cipher))
+	
+		copy(wBuf[:12], eBuf)
+		copy(wBuf[12:], cipher)
+	
+		if _, err := e.Conn.Write(wBuf); err != nil {
+			return sidx, err
+		}
+		increment(&e.sNonce)
+	}
+	return sidx, nil
+/*
+	cipher := secretbox.Seal([]byte{}, b, &e.sNonce, e.psk)
+
+	wBuf := make([]byte, len(cipher) + 12)
+	eBuf := Encode(len(cipher))
+
+	copy(wBuf[:12], eBuf)
+	copy(wBuf[12:], cipher)
+
+	if _, err := e.Conn.Write(wBuf); err != nil {
 		return 0, err
 	}
 	increment(&e.sNonce)
 	return len(b), nil
+*/	
 }
 
 func (e *EncryptedStream) Close() error {
@@ -87,9 +116,9 @@ func (e *EncryptedStream) Close() error {
 
 func (e *EncryptedStream) Drop() (int, error) {
 	defer e.Conn.Close()
-	d := make([]byte, 12)
+	trap := make([]byte, 16)
 	for {
-		_, err := io.ReadFull(e.Conn, d)
+		_, err := io.ReadFull(e.Conn, trap)
 		if err != nil {
 			break
 		}
@@ -97,42 +126,44 @@ func (e *EncryptedStream) Drop() (int, error) {
 	return 0, errors.New("ILLEGAL CONNECTION ABORTED")
 }
 
-func Mask(i int) []byte {
+
+
+func Encode(i int) []byte {
 	r := make([]byte, 4)
 	rand.Read(r)
 
-	ib := make([]byte, 4)
-	binary.LittleEndian.PutUint32(ib, uint32(i))
+	enc := make([]byte, 4)
+	binary.LittleEndian.PutUint32(enc, uint32(i))
 
-	sb := make([]byte, 4)
-	copy(sb, r)
-	am := SH256S(append(sb, H1...))
+	tmp := make([]byte, 4)
+	copy(tmp, r)
+	auth := SH256S(append(tmp, H1...))
 
-	nc := make([]byte, 4)
-	copy(nc, r)
-	rm := SH256S(append(nc, H2...))
+	tmp = make([]byte, 4)
+	copy(tmp, r)
+	mask := SH256S(append(tmp, H2...))
 
-	header := append(r, am...)
-	l := XORBytes(ib, rm)
+	meta := append(r, auth...)
+	xorenc := XORBytes(enc, mask)
 
-	return append(header, l...)
+	return append(meta, xorenc...)
 }
 
-func Unmask(b []byte) (int, bool) {
-	sb := make([]byte, 4)
-	copy(sb, b[:4])
-	am := SH256S(append(sb, H1...))
+func Decode(b []byte) (int, bool) {
+	tmp := make([]byte, 4)
+	copy(tmp, b[:4])
+	auth := SH256S(append(tmp, H1...))
 
-	if !bytes.Equal(am, b[4:8]) {
+	if !bytes.Equal(auth, b[4:8]) {
 		return 0, false
 	}
 
-	nc := make([]byte, 4)
-	copy(nc, b[:4])
-	rm := SH256S(append(nc, H2...))
+	tmp = make([]byte, 4)
+	copy(tmp, b[:4])
+	mask := SH256S(append(tmp, H2...))
 
-	ib := XORBytes(b[8:12], rm)
-	i := int(binary.LittleEndian.Uint32(ib))
+	enc := XORBytes(b[8:12], mask)
+	i := int(binary.LittleEndian.Uint32(enc))
 
 	return i, true
 }
