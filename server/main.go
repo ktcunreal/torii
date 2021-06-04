@@ -3,6 +3,7 @@ package main
 import (
 	"../config"
 	"../utils"
+	"../proxy"
 	"flag"
 	"log"
 	"net"
@@ -23,6 +24,19 @@ func main() {
 	}
 }
 
+func initConf() *config.Server {
+	path := flag.String("c", "./config.json", "CONFIG FILE PATH")
+	flag.Parse()
+	log.Printf("LOADING CONFIG FROM %v", *path)
+	conf, err := config.LoadServerConf(*path)
+	if err != nil {
+		log.Fatalf("LOAD CONFIG ERROR: %v", err)
+	}
+	utils.HKEY1 = utils.SH256(conf.PSK[:10])
+	utils.HKEY2 = utils.SH256(conf.PSK[24:])
+	return conf
+}
+
 func initLsnr(addr string) net.Listener {
 	defer log.Printf("LISTENER STARTED AT %v", addr)
 	listener, err := net.Listen("tcp", addr)
@@ -32,21 +46,8 @@ func initLsnr(addr string) net.Listener {
 	return listener
 }
 
-func initConf() *config.Server {
-	path := flag.String("c", "./config.json", "CONFIGURATION FILE PATH")
-	flag.Parse()
-	log.Printf("LOADING CONFIGURATION FROM %v", *path)
-	conf, err := config.LoadSC(*path)
-	if err != nil {
-		log.Fatalf("LOAD CONFIGURATION ERROR: %v", err)
-	}
-	utils.H1 = utils.SH256(conf.PSK[:10])
-	utils.H2 = utils.SH256(conf.PSK[24:])
-	return conf
-}
-
 func initConn(client net.Conn, PSK [32]byte) {
-	eConn := utils.NewEncryptedStream(client, &PSK)
-	cConn := utils.NewCompStream(eConn)
-	utils.NewSocks5Server(cConn).Proxy()
+	eStream := utils.NewEncStream(client, &PSK)
+	zStream := utils.NewZstdStream(eStream)
+	proxy.NewPServer(zStream).Forward()
 }

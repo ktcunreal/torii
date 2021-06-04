@@ -3,6 +3,7 @@ package main
 import (
 	"../config"
 	"../utils"
+	"../proxy"
 	"flag"
 	"log"
 	"net"
@@ -41,17 +42,17 @@ func initConf() *config.Client {
 	path := flag.String("c", "./config.json", "CONFIGURATION FILE PATH")
 	flag.Parse()
 	log.Printf("LOADING CONFIGURATION FROM %v", *path)
-	conf, err := config.LoadCC(*path)
+	conf, err := config.LoadClientConf(*path)
 	if err != nil {
 		log.Fatalf("LOAD CONFIGURATION ERROR: %v", err)
 	}
-	utils.H1 = utils.SH256(conf.PSK[:10])
-	utils.H2 = utils.SH256(conf.PSK[24:])
+	utils.HKEY1 = utils.SH256(conf.PSK[:10])
+	utils.HKEY2 = utils.SH256(conf.PSK[24:])
 	return conf
 }
 
 func initConn(server, client net.Conn, PSK *[32]byte) {
-	eConn := utils.NewEncryptedStream(server, PSK)
-	cConn := utils.NewCompStream(eConn)
-	utils.Pipe(cConn, client)
+	eStream := utils.NewEncStream(server, PSK)
+	zStream := utils.NewZstdStream(eStream)
+	proxy.NewPClient(client).Forward(zStream)
 }
