@@ -13,6 +13,13 @@ type SnappyStream struct {
 	r *snappy.Reader
 }
 
+func NewSnappyStream(conn net.Conn) *SnappyStream {
+	c := &SnappyStream{Conn: conn}
+	c.w = snappy.NewBufferedWriter(conn)
+	c.r = snappy.NewReader(conn)
+	return c
+}
+
 func (c *SnappyStream) Read(p []byte) (n int, err error) {
 	return c.r.Read(p)
 }
@@ -28,11 +35,8 @@ func (c *SnappyStream) Write(p []byte) (n int, err error) {
 	return len(p), err
 }
 
-func NewSnappyStream(conn net.Conn) *SnappyStream {
-	c := &SnappyStream{Conn: conn}
-	c.w = snappy.NewBufferedWriter(conn)
-	c.r = snappy.NewReader(conn)
-	return c
+func (c *SnappyStream) Close() error {
+	return c.Conn.Close()
 }
 
 // zstd wrapper for net.Conn
@@ -61,4 +65,8 @@ func (z *ZstdStream) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 	return len(p), err
+}
+
+func (z *ZstdStream) Close() error {
+	return z.Conn.Close()
 }
