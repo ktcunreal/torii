@@ -1,7 +1,4 @@
-client/client
-client/client.0331
-client/config*
-client/config.test
-server/server
-server/server.0331
-server/config*
+client/client*
+client/config.json
+server/server*
+server/config.json

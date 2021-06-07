@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	conf := initConf()
+	conf := LoadConf()
 	server := initLsnr(conf.SERVER)
 	defer server.Close()
 
@@ -20,20 +20,20 @@ func main() {
 			log.Printf("FAILED TO ACCEPT CONNECTION FROM CLIENT: %v", err)
 			continue
 		}
-		go initConn(client, conf.PSK)
+		go initConn(client, conf)
 	}
 }
 
-func initConf() *config.Server {
+func LoadConf() *config.Server {
 	path := flag.String("c", "./config.json", "CONFIG FILE PATH")
 	flag.Parse()
 	log.Printf("LOADING CONFIG FROM %v", *path)
-	conf, err := config.LoadServerConf(*path)
+	conf, err := config.InitServer(*path)
 	if err != nil {
 		log.Fatalf("LOAD CONFIG ERROR: %v", err)
 	}
 	utils.HKEY1 = utils.SH256(conf.PSK[:10])
-	utils.HKEY2 = utils.SH256(conf.PSK[24:])
+	utils.HKEY2 = utils.SH256(conf.PSK[20:])
 	return conf
 }
 
@@ -46,8 +46,19 @@ func initLsnr(addr string) net.Listener {
 	return listener
 }
 
-func initConn(client net.Conn, PSK [32]byte) {
-	eStream := utils.NewEncStream(client, &PSK)
-	cStream := utils.NewSnappyStream(eStream)
-	proxy.NewPServer(cStream).Forward()
+func initConn(client net.Conn, conf *config.Server) {
+	eStream := utils.NewEncStream(client, &conf.PSK)
+	switch conf.COMPRESSION{
+		case "none":
+			proxy.NewPServer(eStream).Forward()
+		case "LZ4":
+			cStream := utils.NewLZ4Stream(eStream)
+			proxy.NewPServer(cStream).Forward()
+		case "snappy":
+			cStream := utils.NewSnappyStream(eStream)
+			proxy.NewPServer(cStream).Forward()
+		default:
+			cStream := utils.NewSnappyStream(eStream)
+			proxy.NewPServer(cStream).Forward()	
+	}
 }

@@ -17,23 +17,23 @@ type PServer struct {
 func NewPServer(conn net.Conn) *PServer {
 	return &PServer{
 		Conn: conn,
-		rBuf: make([]byte, 8),
+		rBuf: make([]byte, 2),
 	}
 }
 
-func (t *PServer) Forward() {
-	if _, err := io.ReadFull(t.Conn, t.rBuf[:1]); err != nil {
+func (p *PServer) Forward() {
+	if _, err := io.ReadFull(p.Conn, p.rBuf[:1]); err != nil {
 		log.Printf("UNABLE TO GET DST DOMAIN LEN: %v", err)
-		t.Conn.Close()
+		p.Conn.Close()
 		return
 	}
 
-	length := int(t.rBuf[0])
+	length := int(p.rBuf[0])
 	buf := make([]byte, length + 2)
 
-	if _, err := io.ReadFull(t.Conn, buf); err != nil {
+	if _, err := io.ReadFull(p.Conn, buf); err != nil {
 		log.Printf("UNABLE TO GET DST DOMAIN: %v", err)
-		t.Conn.Close()
+		p.Conn.Close()
 		return
 	}
 
@@ -42,9 +42,9 @@ func (t *PServer) Forward() {
 	dst, err := net.DialTimeout("tcp", addr, time.Second * 5)
 	if err != nil {
 		log.Printf("UNABLE TO CONNECT: %s, %v", addr, err)
-		t.Conn.Close()
+		p.Conn.Close()
 		return 
 	}
 
-	Pipe(t.Conn, dst)
+	Pipe(p.Conn, dst)
 }

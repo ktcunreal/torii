@@ -11,17 +11,16 @@ type Client struct {
 	RAW    string `json:"key"`
 	SERVER string `json:"serveraddr"`
 	CLIENT string `json:"clientaddr"`
+	COMPRESSION string `json:"compression"`
 }
 
-func LoadClientConf(path string) (*Client, error) {
+func InitClient(path string) (*Client, error) {
 	client := &Client{}
-	
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-
 	err = json.NewDecoder(file).Decode(client)
 	client.PSK, client.RAW = SH256(client.RAW), ""
 	return client, err

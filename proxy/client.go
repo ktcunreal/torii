@@ -16,42 +16,42 @@ type PClient struct {
 func NewPClient(conn net.Conn) *PClient {
 	return &PClient{
 		Conn: conn,
-		rBuf: make([]byte, 8),
+		rBuf: make([]byte, 4),
 	}
 }
 
-func (t *PClient) Forward(src net.Conn) {
-	if _, err := io.ReadFull(t.Conn, t.rBuf[:3]); err != nil {
+func (p *PClient) Forward(src net.Conn) {
+	if _, err := io.ReadFull(p.Conn, p.rBuf[:3]); err != nil {
 		log.Printf("UNABLE TO GET SOCKS VERSION: %v", err)
-		t.Conn.Close()
+		p.Conn.Close()
 		return
 	}
 
-	if _, err := t.Conn.Write(Response[:2]); err != nil {
+	if _, err := p.Conn.Write(Response[:2]); err != nil {
 		log.Printf("UNABLE TO SEND RESPONSE: %v", err)
-		t.Conn.Close()
+		p.Conn.Close()
 		return
 	}
 
-	if _, err := io.ReadFull(t.Conn, t.rBuf[:4]); err != nil {
+	if _, err := io.ReadFull(p.Conn, p.rBuf[:4]); err != nil {
 		log.Printf("UNABLE TO READ CLIENT REQUEST: %v", err)
-		t.Conn.Close()
+		p.Conn.Close()
 		return
 	}
 
-	if t.rBuf[3] != 0x03 {
+	if p.rBuf[3] != 0x03 {
 		log.Printf("ATYP WRONG")
-		t.Conn.Close()
+		p.Conn.Close()
 		return
 	}
 
-	if _, err := t.Conn.Write(Response); err != nil {
+	if _, err := p.Conn.Write(Response); err != nil {
 		log.Printf("UNABLE TO WRITE RESONPSE: %v", err)
-		t.Conn.Close()
+		p.Conn.Close()
 		return
 	}
 
-	Pipe(t.Conn, src)
+	Pipe(p.Conn, src)
 }
 
 func Pipe(src, dst net.Conn) {
