@@ -14,29 +14,29 @@ type SnappyStream struct {
 }
 
 func NewSnappyStream(conn net.Conn) *SnappyStream {
-	c := &SnappyStream{Conn: conn}
-	c.w = snappy.NewBufferedWriter(conn)
-	c.r = snappy.NewReader(conn)
-	return c
+	s := &SnappyStream{Conn: conn}
+	s.w = snappy.NewBufferedWriter(conn)
+	s.r = snappy.NewReader(conn)
+	return s
 }
 
-func (c *SnappyStream) Read(p []byte) (n int, err error) {
-	return c.r.Read(p)
+func (s *SnappyStream) Read(p []byte) (n int, err error) {
+	return s.r.Read(p)
 }
 
-func (c *SnappyStream) Write(p []byte) (n int, err error) {
-	if _, err := c.w.Write(p); err != nil {
+func (s *SnappyStream) Write(p []byte) (n int, err error) {
+	if _, err := s.w.Write(p); err != nil {
 		return 0, err
 	}
 
-	if err := c.w.Flush(); err != nil {
+	if err := s.w.Flush(); err != nil {
 		return 0, err
 	}
 	return len(p), err
 }
 
-func (c *SnappyStream) Close() error {
-	return c.Conn.Close()
+func (s *SnappyStream) Close() error {
+	return s.Conn.Close()
 }
 
 // LZ4 wrapper for net.Conn
