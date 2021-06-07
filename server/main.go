@@ -48,6 +48,6 @@ func initLsnr(addr string) net.Listener {
 
 func initConn(client net.Conn, PSK [32]byte) {
 	eStream := utils.NewEncStream(client, &PSK)
-	zStream := utils.NewZstdStream(eStream)
-	proxy.NewPServer(zStream).Forward()
+	cStream := utils.NewSnappyStream(eStream)
+	proxy.NewPServer(cStream).Forward()
 }

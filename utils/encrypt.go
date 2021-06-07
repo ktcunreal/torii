@@ -14,7 +14,7 @@ import (
 
 var (
 	HKEY1, HKEY2 []byte
-	Chunk int = 1024 * 8
+	Chunk int = 1024 * 16
 )
 
 type EncStream struct {
@@ -41,7 +41,6 @@ func (e *EncStream) Read(b []byte) (int, error) {
 	}
 
 	if _, err := io.ReadFull(e.Conn, e.dBuf); err != nil {
-		log.Println("LT 12 BYTES RECEIVED, ", err)
 		return 0, err
 	}
 

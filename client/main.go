@@ -53,6 +53,6 @@ func initConf() *config.Client {
 
 func initConn(server, client net.Conn, PSK *[32]byte) {
 	eStream := utils.NewEncStream(server, PSK)
-	zStream := utils.NewZstdStream(eStream)
-	proxy.NewPClient(client).Forward(zStream)
+	cStream := utils.NewSnappyStream(eStream)
+	proxy.NewPClient(client).Forward(cStream)
 }

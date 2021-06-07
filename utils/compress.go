@@ -2,7 +2,7 @@ package utils
 
 import (
 	"github.com/golang/snappy"
-	"github.com/valyala/gozstd"
+	"github.com/pierrec/lz4"
 	"net"
 )
 
@@ -11,6 +11,13 @@ type SnappyStream struct {
 	net.Conn
 	w *snappy.Writer
 	r *snappy.Reader
+}
+
+func NewSnappyStream(conn net.Conn) *SnappyStream {
+	c := &SnappyStream{Conn: conn}
+	c.w = snappy.NewBufferedWriter(conn)
+	c.r = snappy.NewReader(conn)
+	return c
 }
 
 func (c *SnappyStream) Read(p []byte) (n int, err error) {
@@ -28,37 +35,38 @@ func (c *SnappyStream) Write(p []byte) (n int, err error) {
 	return len(p), err
 }
 
-func NewSnappyStream(conn net.Conn) *SnappyStream {
-	c := &SnappyStream{Conn: conn}
-	c.w = snappy.NewBufferedWriter(conn)
-	c.r = snappy.NewReader(conn)
-	return c
+func (c *SnappyStream) Close() error {
+	return c.Conn.Close()
 }
 
-// zstd wrapper for net.Conn
-type ZstdStream struct {
+// LZ4 wrapper for net.Conn
+type LZ4Stream struct {
 	net.Conn
-	r *gozstd.Reader
-	w *gozstd.Writer
+	w *lz4.Writer
+	r *lz4.Reader
 }
 
-func NewZstdStream(conn net.Conn) *ZstdStream {
-	c := &ZstdStream{Conn: conn}
-	c.r = gozstd.NewReader(conn)
-	c.w = gozstd.NewWriter(conn)
-	return c
+func NewLZ4Stream(conn net.Conn) *LZ4Stream {
+	l := &LZ4Stream{Conn: conn}
+	l.w = lz4.NewWriter(conn)
+	l.r = lz4.NewReader(conn)
+	return l
 }
 
-func (z *ZstdStream) Read(p []byte) (n int, err error) {
-	return z.r.Read(p)
+func (l *LZ4Stream) Read(p []byte) (n int, err error) {
+	return l.r.Read(p)
 }
 
-func (z *ZstdStream) Write(p []byte) (n int, err error) {
-	if _, err := z.w.Write(p); err != nil {
+func (l *LZ4Stream) Write(p []byte) (n int, err error) {
+	if _, err := l.w.Write(p); err != nil {
 		return 0, err
 	}
-	if err := z.w.Flush(); err != nil {
+	if err := l.w.Flush(); err != nil {
 		return 0, err
 	}
 	return len(p), err
+}
+
+func (l *LZ4Stream) Close() error {
+	return l.Conn.Close()
 }
