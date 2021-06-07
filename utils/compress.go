@@ -66,3 +66,7 @@ func (l *LZ4Stream) Write(p []byte) (n int, err error) {
 	}
 	return len(p), err
 }
+
+func (l *LZ4Stream) Close() error {
+	return l.Conn.Close()
+}
