@@ -48,7 +48,7 @@ type S2Stream struct {
 
 func NewS2Stream(conn net.Conn) *S2Stream {
 	s := &S2Stream{Conn: conn}
-	s.w = s2.NewWriter(conn)
+	s.w = s2.NewWriter(conn, s2.WriterBetterCompression())
 	s.r = s2.NewReader(conn)
 	return s
 }
