@@ -56,8 +56,8 @@ func initConn(server, client net.Conn, conf *config.Client) {
 	switch conf.COMPRESSION {
 		case "none":
 			proxy.NewPClient(client).Forward(eStream)
-		case "LZ4": 
-			cStream := utils.NewLZ4Stream(eStream)
+		case "S2": 
+			cStream := utils.NewS2Stream(eStream)
 			proxy.NewPClient(client).Forward(cStream)
 		case "snappy":
 			cStream := utils.NewSnappyStream(eStream)
