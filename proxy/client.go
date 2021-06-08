@@ -40,7 +40,7 @@ func (p *PClient) Forward(src net.Conn) {
 	}
 
 	if p.rBuf[3] != 0x03 {
-		log.Printf("ATYP WRONG")
+		log.Printf("UNSUPPORTED ATYP")
 		p.Conn.Close()
 		return
 	}

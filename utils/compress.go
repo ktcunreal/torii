@@ -47,26 +47,26 @@ type S2Stream struct {
 }
 
 func NewS2Stream(conn net.Conn) *S2Stream {
-	l := &S2Stream{Conn: conn}
-	l.w = s2.NewWriter(conn)
-	l.r = s2.NewReader(conn)
-	return l
+	s := &S2Stream{Conn: conn}
+	s.w = s2.NewWriter(conn)
+	s.r = s2.NewReader(conn)
+	return s
 }
 
-func (l *S2Stream) Read(p []byte) (n int, err error) {
-	return l.r.Read(p)
+func (s *S2Stream) Read(p []byte) (n int, err error) {
+	return s.r.Read(p)
 }
 
-func (l *S2Stream) Write(p []byte) (n int, err error) {
-	if _, err := l.w.Write(p); err != nil {
+func (s *S2Stream) Write(p []byte) (n int, err error) {
+	if _, err := s.w.Write(p); err != nil {
 		return 0, err
 	}
-	if err := l.w.Flush(); err != nil {
+	if err := s.w.Flush(); err != nil {
 		return 0, err
 	}
 	return len(p), err
 }
 
-func (l *S2Stream) Close() error {
-	return l.Conn.Close()
+func (s *S2Stream) Close() error {
+	return s.Conn.Close()
 }
