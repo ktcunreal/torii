@@ -32,7 +32,7 @@ go build -o client client/main.go
 ```
 
 ## Usage
-Torii reads config.json in current working directory by default, they should be setup like this:
+Torii reads config.json in current working directory by default, examples:
 ### for server
 
 ```
