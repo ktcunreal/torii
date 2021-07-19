@@ -2,7 +2,6 @@ package utils
 
 import (
 	"github.com/golang/snappy"
-	"github.com/klauspost/compress/s2"
 	"net"
 )
 
@@ -48,7 +47,7 @@ type S2Stream struct {
 
 func NewS2Stream(conn net.Conn) *S2Stream {
 	s := &S2Stream{Conn: conn}
-	s.w = s2.NewWriter(conn, s2.WriterBetterCompression())
+	s.w = s2.NewWriter(conn)
 	s.r = s2.NewReader(conn)
 	return s
 }

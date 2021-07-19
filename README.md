@@ -32,33 +32,33 @@ go build -o client client/main.go
 ```
 
 ## Usage
-Torii reads config.json in current working directory by default, examples:
-### for server
+Torii reads config.json in current working directory by default
+### server config
 
 ```
 {
     "serveraddr": "0.0.0.0:8462",
-    "compression": "S2",
+    "compression": "snappy",
     "key": "some-long-random-passphrase"
 }
 ```
 or specify the location of your config file 
 > ./server -c /path/to/your/config/file 
 
-### for client
+### client config
 
 ```
 {
     "serveraddr": "127.0.0.1:8642",
     "clientaddr": "0.0.0.0:1234",
-    "compression": "S2",
+    "compression": "snappy",
     "key": "some-long-random-passphrase"
 }
 ```
-samething
+
 > ./client -c /path/to/your/config/file 
 
-*Use a password consist of alphanumeric and symbol, at least 20 digits in length (Strongly recommend)*
+*Use a password consist of alphanumeric and symbol, at least 20 digits in length (Recommended)*
 
 ## Reference
 https://github.com/klauspost/compress

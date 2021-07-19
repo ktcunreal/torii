@@ -1,6 +1,6 @@
 {
     "serveraddr": "127.0.0.1:8642",
     "clientaddr": "0.0.0.0:1234",
-    "compression": "Avaliable value: 'LZ4', 'snappy', 'none', default value is 'snappy'",
+    "compression": "Avaliable value: 'S2', 'snappy', 'none', default value is 'snappy'",
     "key": "some-long-random-passphrase"
 }
