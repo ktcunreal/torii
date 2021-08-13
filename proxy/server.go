@@ -39,12 +39,12 @@ func (p *PServer) Forward() {
 
 	addr := fmt.Sprintf("%s:%d", string(buf[:length]), binary.BigEndian.Uint16(buf[length:]))
 	log.Printf("CONNECTING: %s", addr)
-	dst, err := net.DialTimeout("tcp", addr, time.Second * 5)
+	dst, err := net.DialTimeout("tcp", addr, time.Second * 10)
 	if err != nil {
 		log.Printf("UNABLE TO CONNECT: %s, %v", addr, err)
 		p.Conn.Close()
 		return 
 	}
 
-	Pipe(p.Conn, dst)
+	Pipe(p.Conn, dst);
 }
