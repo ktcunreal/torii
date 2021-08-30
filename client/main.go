@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/ktcunreal/torii/config"
-	"github.com/ktcunreal/torii/utils"
-	"github.com/ktcunreal/torii/proxy"
+	"../config"
+	"../utils"
+	"../proxy"
 	"log"
 	"net"
 )

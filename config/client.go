@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/ktcunreal/torii/utils"
+	"../utils"
 	"encoding/json"
 	"flag"
 	"os"
