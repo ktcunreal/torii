@@ -40,7 +40,7 @@ func (e *EncStream) Read(b []byte) (int, error) {
 		return n, nil
 	}
 
-	if n, err := io.ReadFull(e.Conn, e.dBuf); err != nil && n != 12 {
+	if n, err := io.ReadFull(e.Conn, e.dBuf); err != nil || n != 12 {
 		return 0, err
 	}
 
