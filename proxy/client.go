@@ -6,28 +6,28 @@ import (
 	"net"
 )
 
-var Response = []byte{0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+var res = []byte{0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 
-type PClient struct {
+type ProxyClient struct {
 	rBuf []byte
 	net.Conn
 }
 
-func NewPClient(conn net.Conn) *PClient {
-	return &PClient{
+func NewProxyClient(conn net.Conn) *ProxyClient {
+	return &ProxyClient{
 		Conn: conn,
 		rBuf: make([]byte, 4),
 	}
 }
 
-func (p *PClient) Forward(src net.Conn) {
+func (p *ProxyClient) Forward(src net.Conn) {
 	if _, err := io.ReadFull(p.Conn, p.rBuf[:3]); err != nil {
 		log.Printf("UNABLE TO GET SOCKS VERSION: %v", err)
 		p.Conn.Close()
 		return
 	}
 
-	if _, err := p.Conn.Write(Response[:2]); err != nil {
+	if _, err := p.Conn.Write(res[:2]); err != nil {
 		log.Printf("UNABLE TO SEND RESPONSE: %v", err)
 		p.Conn.Close()
 		return
@@ -45,12 +45,11 @@ func (p *PClient) Forward(src net.Conn) {
 		return
 	}
 
-	if _, err := p.Conn.Write(Response); err != nil {
-		log.Printf("UNABLE TO WRITE RESONPSE: %v", err)
+	if _, err := p.Conn.Write(res); err != nil {
+		log.Printf("UNABLE TO WRITE RESPONSE: %v", err)
 		p.Conn.Close()
 		return
 	}
-
 	Pipe(p.Conn, src)
 }
 

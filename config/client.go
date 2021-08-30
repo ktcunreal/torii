@@ -1,9 +1,11 @@
 package config
 
 import (
-	"crypto/sha256"
+	"github.com/ktcunreal/torii/utils"
 	"encoding/json"
+	"flag"
 	"os"
+	"log"
 )
 
 type Client struct {
@@ -12,20 +14,26 @@ type Client struct {
 	SERVER string `json:"serveraddr"`
 	CLIENT string `json:"clientaddr"`
 	COMPRESSION string `json:"compression"`
+
 }
 
-func InitClient(path string) (*Client, error) {
-	client := &Client{}
-	file, err := os.Open(path)
+func LoadClient() *Client {
+	path := flag.String("c", "./config.json", "CONFIGURATION PATH")
+	flag.Parse()
+	log.Printf("LOADING CONFIG FROM %v", *path)
+
+	conf := &Client{}
+	file, err := os.Open(*path)
 	if err != nil {
-		return nil, err
+		log.Fatalf("LOAD CONFIG ERROR: %v", err)
 	}
 	defer file.Close()
-	err = json.NewDecoder(file).Decode(client)
-	client.PSK, client.RAW = SH256(client.RAW), ""
-	return client, err
+
+	err = json.NewDecoder(file).Decode(conf)
+	conf.PSK, conf.RAW = utils.SH256R(conf.RAW), ""
+
+	utils.HKEY1 = utils.SH256L(conf.PSK[:10])
+	utils.HKEY2 = utils.SH256L(conf.PSK[20:])
+	return conf
 }
 
-func SH256(s string) [32]byte {
-	return sha256.Sum256([]byte(s))
-}

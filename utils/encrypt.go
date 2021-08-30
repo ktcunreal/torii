@@ -12,9 +12,10 @@ import (
 	"net"
 )
 
+const Chunk int = 16384
+
 var (
 	HKEY1, HKEY2 []byte
-	Chunk int = 1024 * 16
 )
 
 type EncStream struct {
@@ -79,20 +80,15 @@ func (e *EncStream) Write(b []byte) (int, error) {
 		} else {
 			eidx = len(b)
 		}
-			
 		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.psk)
-
-		wBuf := make([]byte, len(cipher) + 12)
-		eBuf := Encode(len(cipher))
-	
-		copy(wBuf[:12], eBuf)
-		copy(wBuf[12:], cipher)
-	
-		if _, err := e.Conn.Write(wBuf); err != nil {
+		increment(&e.sNonce)
+		enc := Encode(len(cipher))
+		if _, err := e.Conn.Write(enc); err != nil {
 			return sidx, err
 		}
-
-		increment(&e.sNonce)
+		if _, err := e.Conn.Write(cipher); err != nil {
+			return sidx, err
+		}
 	}
 	return sidx, nil	
 }
@@ -103,14 +99,14 @@ func (e *EncStream) Close() error {
 
 func (e *EncStream) Drop() (int, error) {
 	defer e.Conn.Close()
-	trap := make([]byte, 16)
+	trap := make([]byte, 12)
 	for {
 		_, err := io.ReadFull(e.Conn, trap)
 		if err != nil {
 			break
 		}
 	}
-	return 0, errors.New("ILLEGAL CONNECTION ABORTED")
+	return 0, errors.New("ILLEGAL CONNECTION")
 }
 
 func Encode(i int) []byte {
@@ -128,10 +124,10 @@ func Encode(i int) []byte {
 	copy(tmp, r)
 	mask := SH256S(append(tmp, HKEY2...))
 
-	meta := append(r, auth...)
+	head := append(r, auth...)
 	xorenc := XORBytes(enc, mask)
 
-	return append(meta, xorenc...)
+	return append(head, xorenc...)
 }
 
 func Decode(b []byte) (int, bool) {
@@ -170,7 +166,7 @@ func increment(b *[24]byte) {
 	}
 }
 
-func SH256(b []byte) []byte {
+func SH256L(b []byte) []byte {
 	s := sha256.Sum256(b)
 	return s[:]
 }
@@ -178,4 +174,8 @@ func SH256(b []byte) []byte {
 func SH256S(b []byte) []byte {
 	s := sha256.Sum256(b)
 	return s[28:]
+}
+
+func SH256R(s string) [32]byte {
+	return sha256.Sum256([]byte(s))
 }

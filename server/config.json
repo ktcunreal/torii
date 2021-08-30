@@ -1,5 +1,5 @@
 {
     "serveraddr": "0.0.0.0:8462",
-    "compression": "Avaliable value: 'S2', 'snappy', 'none', default value is 'snappy'",
+    "compression": "Avaliable value: 'snappy', 'none', default value is 'snappy'",
     "key": "some-long-random-passphrase"
 }

@@ -4,13 +4,12 @@ import (
 	"github.com/ktcunreal/torii/config"
 	"github.com/ktcunreal/torii/utils"
 	"github.com/ktcunreal/torii/proxy"
-	"flag"
 	"log"
 	"net"
 )
 
 func main() {
-	conf := LoadConf()
+	conf := config.LoadServer()
 	server := initLsnr(conf.SERVER)
 	defer server.Close()
 
@@ -22,19 +21,6 @@ func main() {
 		}
 		go initConn(client, conf)
 	}
-}
-
-func LoadConf() *config.Server {
-	path := flag.String("c", "./config.json", "CONFIG FILE PATH")
-	flag.Parse()
-	log.Printf("LOADING CONFIG FROM %v", *path)
-	conf, err := config.InitServer(*path)
-	if err != nil {
-		log.Fatalf("LOAD CONFIG ERROR: %v", err)
-	}
-	utils.HKEY1 = utils.SH256(conf.PSK[:10])
-	utils.HKEY2 = utils.SH256(conf.PSK[20:])
-	return conf
 }
 
 func initLsnr(addr string) net.Listener {
@@ -50,15 +36,12 @@ func initConn(client net.Conn, conf *config.Server) {
 	eStream := utils.NewEncStream(client, &conf.PSK)
 	switch conf.COMPRESSION{
 		case "none":
-			proxy.NewPServer(eStream).Forward()
-		case "S2":
-			cStream := utils.NewS2Stream(eStream)
-			proxy.NewPServer(cStream).Forward()
+			proxy.NewProxyServer(eStream).Forward()
 		case "snappy":
 			cStream := utils.NewSnappyStream(eStream)
-			proxy.NewPServer(cStream).Forward()
+			proxy.NewProxyServer(cStream).Forward()
 		default:
 			cStream := utils.NewSnappyStream(eStream)
-			proxy.NewPServer(cStream).Forward()	
+			proxy.NewProxyServer(cStream).Forward()	
 	}
 }

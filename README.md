@@ -2,12 +2,11 @@
 A simple, easy-to-use tunnel utility written in go.
 
 ## Feature
-- Use crypto from trusted source (NaCl in Official Go cryptography library)
-- Lightweight protocol
-- The length of encrypted messages is masked
-- Enable nonce to filter replay attack
-- Drop illegal connections to protect server against fingerprint probing
-- Support appropriate stream compression for web browsing
+- Use Nacl crypto library
+- Lightweight
+- Obfuscate message length
+- Suspend illegal connections to filter replay attack / server fingerprint probing
+- Provide stream compression for better web-browsing experience
 
 ## Download
 Download binary from [github release page](https://github.com/ktcunreal/torii/releases)
@@ -22,7 +21,6 @@ Install Dependencies:
 ```
 go get -u golang.org/x/crypto/nacl/secretbox 
 go get -u github.com/golang/snappy
-go get -u github.com/klauspost/compress/s2
 ```
 
 Build binaries:
@@ -61,7 +59,6 @@ or specify the location of your config file
 *Use a password consist of alphanumeric and symbol, at least 20 digits in length (Recommended)*
 
 ## Reference
-https://github.com/klauspost/compress
 
 https://github.com/golang/snappy
 

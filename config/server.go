@@ -1,7 +1,10 @@
 package config
 
 import (
+	"github.com/ktcunreal/torii/utils"
 	"encoding/json"
+	"log"
+	"flag"
 	"os"
 )
 
@@ -12,16 +15,24 @@ type Server struct {
 	COMPRESSION string `json:"compression"`
 }
 
-func InitServer(path string) (*Server, error) {
-	server := &Server{}
 
-	file, err := os.Open(path)
+func LoadServer() *Server {
+	path := flag.String("c", "./config.json", "CONFIG FILE PATH")
+	flag.Parse()
+	log.Printf("LOADING CONFIG FROM %v", *path)
+
+	conf := &Server{}
+	file, err := os.Open(*path)
 	if err != nil {
-		return nil, err
+		log.Fatalf("LOAD CONFIG ERROR: %v", err)
 	}
 	defer file.Close()
+	if err := json.NewDecoder(file).Decode(conf); err != nil {
+		log.Fatalf("PARSE CONFIG ERROR: %v", err)
+	}
 
-	err = json.NewDecoder(file).Decode(server)
-	server.PSK, server.RAW = SH256(server.RAW), ""
-	return server, err
+	conf.PSK, conf.RAW = utils.SH256R(conf.RAW), ""
+	utils.HKEY1 = utils.SH256L(conf.PSK[:10])
+	utils.HKEY2 = utils.SH256L(conf.PSK[20:])
+	return conf
 }

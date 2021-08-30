@@ -4,20 +4,19 @@ import (
 	"github.com/ktcunreal/torii/config"
 	"github.com/ktcunreal/torii/utils"
 	"github.com/ktcunreal/torii/proxy"
-	"flag"
 	"log"
 	"net"
 )
 
 func main() {
-	conf := LoadConf()
+	conf := config.LoadClient()
 	listener := initLsnr(conf.CLIENT)
 	defer listener.Close()
 
 	for {
 		client, err := listener.Accept()
 		if err != nil {
-			log.Println("FAILED TO ACCEPT CONNECTION FROM USER: ", err)
+			log.Println("FAILED TO ACCEPT CONNECTION: ", err)
 			continue
 		}
 		server, err := net.Dial("tcp", conf.SERVER)
@@ -27,19 +26,6 @@ func main() {
 		}
 		go initConn(server, client, conf)
 	}
-}
-
-func LoadConf() *config.Client {
-	path := flag.String("c", "./config.json", "CONFIG FILE PATH")
-	flag.Parse()
-	log.Printf("LOADING CONFIG FROM %v", *path)
-	conf, err := config.InitClient(*path)
-	if err != nil {
-		log.Fatalf("LOAD CONFIG ERROR: %v", err)
-	}
-	utils.HKEY1 = utils.SH256(conf.PSK[:10])
-	utils.HKEY2 = utils.SH256(conf.PSK[20:])
-	return conf
 }
 
 func initLsnr(addr string) net.Listener {
@@ -55,15 +41,12 @@ func initConn(server, client net.Conn, conf *config.Client) {
 	eStream := utils.NewEncStream(server, &conf.PSK)
 	switch conf.COMPRESSION {
 		case "none":
-			proxy.NewPClient(client).Forward(eStream)
-		case "S2": 
-			cStream := utils.NewS2Stream(eStream)
-			proxy.NewPClient(client).Forward(cStream)
+			proxy.NewProxyClient(client).Forward(eStream)
 		case "snappy":
 			cStream := utils.NewSnappyStream(eStream)
-			proxy.NewPClient(client).Forward(cStream)
+			proxy.NewProxyClient(client).Forward(cStream)
 		default:
 			cStream := utils.NewSnappyStream(eStream)
-			proxy.NewPClient(client).Forward(cStream)
+			proxy.NewProxyClient(client).Forward(cStream)
 	}
 }
