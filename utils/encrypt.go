@@ -14,22 +14,32 @@ import (
 
 const Chunk int = 16384
 
-var (
-	HKEY1, HKEY2 []byte
-)
+type Key struct {
+	hash *[32]byte
+	salt  []byte
+	pepper  []byte
+}
+
+func NewKey(s string) *Key {
+	h := SH256R(s)
+	return &Key{
+		hash: &h,
+		salt: SH256L(h[:10]),
+		pepper: SH256L(h[20:]),
+	}
+}
 
 type EncStream struct {
 	net.Conn
-	rBuf, dBuf []byte
-	sNonce [24]byte
-	rNonce [24]byte
-	psk    *[32]byte
+	key				*Key
+	rBuf, dBuf 		[]byte
+	rNonce, sNonce 	[24]byte
 }
 
-func NewEncStream(c net.Conn, k *[32]byte) *EncStream {
+func NewEncStream(conn net.Conn, psk *Key) *EncStream {
 	return &EncStream{
-		Conn: c,
-		psk:  k,
+		Conn: conn,
+		key: psk,
 		dBuf: make([]byte, 12),
 	}
 }
@@ -45,7 +55,7 @@ func (e *EncStream) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	size, ok := Decode(e.dBuf)
+	size, ok := Decode(e.dBuf, e.key.salt, e.key.pepper)
 	if !ok {
 		log.Println("INVALID CIPHER LENGTH")
 		return e.Drop()
@@ -57,7 +67,7 @@ func (e *EncStream) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.psk)
+	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.key.hash)
 	if !ok {
 		log.Println("DECRYPT FAILED")
 		return e.Drop()
@@ -80,9 +90,9 @@ func (e *EncStream) Write(b []byte) (int, error) {
 		} else {
 			eidx = len(b)
 		}
-		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.psk)
+		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.key.hash)
 		increment(&e.sNonce)
-		enc := Encode(len(cipher))
+		enc := Encode(len(cipher), e.key.salt, e.key.pepper)
 		if _, err := e.Conn.Write(enc); err != nil {
 			return sidx, err
 		}
@@ -109,7 +119,7 @@ func (e *EncStream) Drop() (int, error) {
 	return 0, errors.New("ILLEGAL CONNECTION")
 }
 
-func Encode(i int) []byte {
+func Encode(i int, s, p []byte) []byte {
 	r := make([]byte, 4)
 	rand.Read(r)
 
@@ -118,11 +128,11 @@ func Encode(i int) []byte {
 
 	tmp := make([]byte, 4)
 	copy(tmp, r)
-	auth := SH256S(append(tmp, HKEY1...))
+	auth := SH256S(append(tmp, s...))
 
 	tmp = make([]byte, 4)
 	copy(tmp, r)
-	mask := SH256S(append(tmp, HKEY2...))
+	mask := SH256S(append(tmp, p...))
 
 	head := append(r, auth...)
 	xorenc := XORBytes(enc, mask)
@@ -130,10 +140,10 @@ func Encode(i int) []byte {
 	return append(head, xorenc...)
 }
 
-func Decode(b []byte) (int, bool) {
+func Decode(b []byte, s, p []byte) (int, bool) {
 	tmp := make([]byte, 4)
 	copy(tmp, b[:4])
-	auth := SH256S(append(tmp, HKEY1...))
+	auth := SH256S(append(tmp, s...))
 
 	if !bytes.Equal(auth, b[4:8]) {
 		return 0, false
@@ -141,7 +151,7 @@ func Decode(b []byte) (int, bool) {
 
 	tmp = make([]byte, 4)
 	copy(tmp, b[:4])
-	mask := SH256S(append(tmp, HKEY2...))
+	mask := SH256S(append(tmp, p...))
 
 	enc := XORBytes(b[8:12], mask)
 	i := int(binary.LittleEndian.Uint32(enc))

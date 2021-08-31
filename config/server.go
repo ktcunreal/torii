@@ -1,7 +1,7 @@
 package config
 
 import (
-	"../utils"
+	// "../utils"
 	"encoding/json"
 	"log"
 	"flag"
@@ -9,30 +9,34 @@ import (
 )
 
 type Server struct {
-	PSK    [32]byte
 	RAW    string `json:"key"`
 	SERVER string `json:"serveraddr"`
 	COMPRESSION string `json:"compression"`
 }
 
-
 func LoadServer() *Server {
-	path := flag.String("c", "./config.json", "CONFIG FILE PATH")
-	flag.Parse()
-	log.Printf("LOADING CONFIG FROM %v", *path)
+	config := &Server{}
+	c := flag.String("c", "./config.json", "Configuration path")
+	p := flag.String("p","","Pre-shared Key")
+	s := flag.String("s","0.0.0.0:8907","Server address")
+	z := flag.String("z","snappy","Use compression")
 
-	conf := &Server{}
-	file, err := os.Open(*path)
+	flag.Parse()
+	log.Printf("LOADING CONFIG FROM %v", *c)
+
+	file, err := os.Open(*c)
 	if err != nil {
-		log.Fatalf("LOAD CONFIG ERROR: %v", err)
+		log.Printf("COULD NOT LOAD CONFIG: %v, TRYING TO PARSE CMDLINE ARGS", err)
+		config.SERVER = *s
+		config.COMPRESSION = *z
+		config.RAW = *p
+		return config
 	}
 	defer file.Close()
-	if err := json.NewDecoder(file).Decode(conf); err != nil {
+	
+	if err := json.NewDecoder(file).Decode(config); err != nil {
 		log.Fatalf("PARSE CONFIG ERROR: %v", err)
 	}
 
-	conf.PSK, conf.RAW = utils.SH256R(conf.RAW), ""
-	utils.HKEY1 = utils.SH256L(conf.PSK[:10])
-	utils.HKEY2 = utils.SH256L(conf.PSK[20:])
-	return conf
+	return config
 }

@@ -10,7 +10,9 @@ import (
 
 func main() {
 	conf := config.LoadServer()
-	server := initLsnr(conf.SERVER)
+	key := utils.NewKey(conf.RAW)
+	
+	server := initListener(conf.SERVER)
 	defer server.Close()
 
 	for {
@@ -19,11 +21,11 @@ func main() {
 			log.Printf("FAILED TO ACCEPT CONNECTION FROM CLIENT: %v", err)
 			continue
 		}
-		go initConn(client, conf)
+		go connect(client, conf, key)
 	}
 }
 
-func initLsnr(addr string) net.Listener {
+func initListener(addr string) net.Listener {
 	defer log.Printf("LISTENER STARTED AT %v", addr)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -32,8 +34,8 @@ func initLsnr(addr string) net.Listener {
 	return listener
 }
 
-func initConn(client net.Conn, conf *config.Server) {
-	eStream := utils.NewEncStream(client, &conf.PSK)
+func connect(client net.Conn, conf *config.Server, key *utils.Key) {
+	eStream := utils.NewEncStream(client, key)
 	switch conf.COMPRESSION{
 		case "none":
 			proxy.NewProxyServer(eStream).Forward()
