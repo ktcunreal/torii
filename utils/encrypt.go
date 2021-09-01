@@ -31,9 +31,9 @@ func NewKey(s string) *Key {
 
 type EncStream struct {
 	net.Conn
-	key				*Key
-	rBuf, dBuf 		[]byte
-	rNonce, sNonce 	[24]byte
+	key		*Key
+	rBuf, dBuf	[]byte
+	rNonce, sNonce	[24]byte
 }
 
 func NewEncStream(conn net.Conn, psk *Key) *EncStream {
