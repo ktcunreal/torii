@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"log"
 	"flag"
+	"net"
+	"strings"
 	"os"
+	"strconv"
 )
 
 type Server struct {
@@ -17,25 +20,46 @@ func LoadServer() *Server {
 	config := &Server{}
 	c := flag.String("c", "./config.json", "Configuration path")
 	p := flag.String("p","","Pre-shared Key")
-	s := flag.String("s","0.0.0.0:8907","Server address")
+	s := flag.String("s","0.0.0.0:8000","Server address")
 	z := flag.String("z","snappy","Use compression")
-
 	flag.Parse()
-	log.Printf("LOADING CONFIG FROM %v", *c)
 
 	file, err := os.Open(*c)
-	if err != nil {
-		log.Printf("COULD NOT LOAD CONFIG: %v, TRYING TO PARSE CMDLINE ARGS", err)
-		config.SERVER = *s
-		config.COMPRESSION = *z
-		config.RAW = *p
-		return config
-	}
+	log.Printf("LOADING CONFIG FROM %v", *c)
 	defer file.Close()
-	
-	if err := json.NewDecoder(file).Decode(config); err != nil {
-		log.Fatalf("PARSE CONFIG ERROR: %v", err)
-	}
 
+	switch err {
+		case nil:
+			if err := json.NewDecoder(file).Decode(config); err != nil {
+				log.Fatalf("PARSE CONFIG ERROR: %v", err)
+			}
+			if !validate(config.SERVER) { 
+				log.Fatalln("Invalid IP ADDRESS")
+			}
+		default:
+			log.Println("COULD NOT READ CONFIG FROM FILE, PARSING CMDLINE ARGS")
+			config.RAW = *p
+			config.COMPRESSION = *z
+			config.SERVER = *s
+			if !validate(config.SERVER) { 
+				log.Fatalln("INVALID IP ADDRESS")
+			}
+	}
 	return config
+}
+
+func validate(s string) bool {
+	var ip, port string
+	i := strings.LastIndexByte(s, ':')
+	if i == -1 {
+		return false
+	}
+	ip, port = s[:i], s[i+1:]
+	if len(ip) == 0 || net.ParseIP(ip) == nil{
+		return false
+	}
+	if p, err := strconv.Atoi(port); err != nil || p > 65535 || p < 1 {
+		return false
+	}
+	return true
 }
