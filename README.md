@@ -40,8 +40,6 @@ Torii reads config.json in current working directory by default
     "key": "some-long-random-passphrase"
 }
 ```
-or specify the location of your config file 
-> ./server -c /path/to/your/config/file 
 
 ### client config
 
@@ -53,8 +51,6 @@ or specify the location of your config file
     "key": "some-long-random-passphrase"
 }
 ```
-
-> ./client -c /path/to/your/config/file 
 
 *Use a password consist of alphanumeric and symbol, at least 20 digits in length (Recommended)*
 
