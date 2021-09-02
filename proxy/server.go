@@ -29,7 +29,7 @@ func (p *ProxyServer) Forward() {
 	}
 
 	length := int(p.rBuf[0])
-	buf := make([]byte, length + 2)
+	buf := make([]byte, length+2)
 	if _, err := io.ReadFull(p.Conn, buf); err != nil {
 		log.Printf("UNABLE TO GET DST DOMAIN NAME: %v", err)
 		p.Conn.Close()
@@ -39,12 +39,12 @@ func (p *ProxyServer) Forward() {
 	addr := fmt.Sprintf("%s:%d", string(buf[:length]), binary.BigEndian.Uint16(buf[length:]))
 	log.Printf("CONNECTING: %s", addr)
 
-	dst, err := net.DialTimeout("tcp", addr, time.Second * 15)
+	dst, err := net.DialTimeout("tcp", addr, time.Second*15)
 	if err != nil {
 		log.Printf("UNABLE TO CONNECT: %s, %v", addr, err)
 		p.Conn.Close()
-		return 
+		return
 	}
 
-	Pipe(p.Conn, dst);
+	Pipe(p.Conn, dst)
 }

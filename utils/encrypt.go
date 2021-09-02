@@ -15,31 +15,31 @@ import (
 const Chunk int = 16384
 
 type Key struct {
-	hash *[32]byte
-	salt  []byte
-	pepper  []byte
+	hash   *[32]byte
+	salt   []byte
+	pepper []byte
 }
 
 func NewKey(s string) *Key {
 	h := SH256R(s)
 	return &Key{
-		hash: &h,
-		salt: SH256L(h[:10]),
+		hash:   &h,
+		salt:   SH256L(h[:10]),
 		pepper: SH256L(h[20:]),
 	}
 }
 
 type EncStream struct {
 	net.Conn
-	key		*Key
-	rBuf, dBuf	[]byte
-	rNonce, sNonce	[24]byte
+	key            *Key
+	rBuf, dBuf     []byte
+	rNonce, sNonce [24]byte
 }
 
 func NewEncStream(conn net.Conn, psk *Key) *EncStream {
 	return &EncStream{
 		Conn: conn,
-		key: psk,
+		key:  psk,
 		dBuf: make([]byte, 12),
 	}
 }
@@ -85,7 +85,7 @@ func (e *EncStream) Read(b []byte) (int, error) {
 func (e *EncStream) Write(b []byte) (int, error) {
 	sidx, eidx := 0, 0
 	for ; sidx < len(b); sidx = eidx {
-		if len(b) - eidx >= Chunk {
+		if len(b)-eidx >= Chunk {
 			eidx += Chunk
 		} else {
 			eidx = len(b)
@@ -100,7 +100,7 @@ func (e *EncStream) Write(b []byte) (int, error) {
 			return sidx, err
 		}
 	}
-	return sidx, nil	
+	return sidx, nil
 }
 
 func (e *EncStream) Close() error {

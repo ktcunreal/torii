@@ -37,4 +37,3 @@ func (s *SnappyStream) Write(p []byte) (n int, err error) {
 func (s *SnappyStream) Close() error {
 	return s.Conn.Close()
 }
-

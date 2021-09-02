@@ -2,8 +2,8 @@ package main
 
 import (
 	"../config"
-	"../utils"
 	"../proxy"
+	"../utils"
 	"log"
 	"net"
 )
@@ -11,7 +11,6 @@ import (
 func main() {
 	conf := config.LoadServer()
 	key := utils.NewKey(conf.RAW)
-	
 	server := initListener(conf.SERVER)
 	defer server.Close()
 
@@ -36,14 +35,14 @@ func initListener(addr string) net.Listener {
 
 func connect(client net.Conn, conf *config.Server, key *utils.Key) {
 	eStream := utils.NewEncStream(client, key)
-	switch conf.COMPRESSION{
-		case "none":
-			proxy.NewProxyServer(eStream).Forward()
-		case "snappy":
-			cStream := utils.NewSnappyStream(eStream)
-			proxy.NewProxyServer(cStream).Forward()
-		default:
-			cStream := utils.NewSnappyStream(eStream)
-			proxy.NewProxyServer(cStream).Forward()	
+	switch conf.COMPRESSION {
+	case "none":
+		proxy.NewProxyServer(eStream).Forward()
+	case "snappy":
+		cStream := utils.NewSnappyStream(eStream)
+		proxy.NewProxyServer(cStream).Forward()
+	default:
+		cStream := utils.NewSnappyStream(eStream)
+		proxy.NewProxyServer(cStream).Forward()
 	}
 }
