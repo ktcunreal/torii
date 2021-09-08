@@ -20,7 +20,7 @@ func LoadClientConf() *Client {
 	socksserver := flag.String("s", "", "Socks server address")
 	socksclient := flag.String("l", "", "Socks client address")
 	tcpserver := flag.String("t", "", "Tcp server address")
-	tcpclient := flag.String("a", "", "Tcp client address")
+	tcpclient := flag.String("b", "", "Tcp client address")
 	config := flag.String("c", "./config.json", "Configuration path")
 	comp := flag.String("z", "snappy", "Use compression")
 	psk := flag.String("p", "", "Pre-shared Key")
