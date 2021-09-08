@@ -35,7 +35,9 @@ Torii reads config.json in current working directory by default
 
 ```
 {
-    "serveraddr": "0.0.0.0:8462",
+    "socksserver": "0.0.0.0:1234",
+    "tcpserver": 0.0.0.0:2345""
+    "upstream": "127.0.0.1:8123",
     "compression": "snappy",
     "key": "some-long-random-passphrase"
 }
@@ -45,8 +47,10 @@ Torii reads config.json in current working directory by default
 
 ```
 {
-    "serveraddr": "127.0.0.1:8642",
-    "clientaddr": "0.0.0.0:1234",
+    "socksserver": "127.0.0.1:1234",
+    "socksclient": "0.0.0.0:1080",
+    "tcpserver": "127.0.0.1:2345",
+    "tcpclient": "0.0.0.0:1081",
     "compression": "snappy",
     "key": "some-long-random-passphrase"
 }
