@@ -8,42 +8,49 @@ import (
 )
 
 type Client struct {
-	RAW         string `json:"key"`
-	SERVER      string `json:"serveraddr"`
-	CLIENT      string `json:"clientaddr"`
+	SOCKSSERVER string `json:"socksserver"`
+	SOCKSCLIENT string `json:"socksclient"`
 	COMPRESSION string `json:"compression"`
+	TCPSERVER   string `json:"tcpserver"`
+	TCPCLIENT   string `json:"tcpclient"`
+	RAW         string `json:"key"`
 }
 
-func LoadClient() *Client {
-	config := &Client{}
-	c := flag.String("c", "./config.json", "Configuration path")
-	p := flag.String("p", "", "Pre-shared Key")
-	s := flag.String("s", "127.0.0.1:8000", "Server address")
-	l := flag.String("l", "0.0.0.0:9000", "Client address")
-	z := flag.String("z", "snappy", "Use compression")
+func LoadClientConf() *Client {
+	socksserver := flag.String("s", "", "Socks server address")
+	socksclient := flag.String("l", "", "Socks client address")
+	tcpserver := flag.String("t", "", "Tcp server address")
+	tcpclient := flag.String("a", "", "Tcp client address")
+	config := flag.String("c", "./config.json", "Configuration path")
+	comp := flag.String("z", "snappy", "Use compression")
+	psk := flag.String("p", "", "Pre-shared Key")
+
 	flag.Parse()
 
-	log.Printf("LOADING CONFIG FROM %v", *c)
-	file, err := os.Open(*c)
+	file, err := os.Open(*config)
 	defer file.Close()
+	client := &Client{}
 
 	switch err {
 	case nil:
-		if err := json.NewDecoder(file).Decode(config); err != nil {
+		log.Printf("LOADING CONFIG FROM %v", *config)
+		if err := json.NewDecoder(file).Decode(client); err != nil {
 			log.Fatalf("PARSE CONFIG ERROR: %v", err)
 		}
-		if !validate(config.SERVER) || !validate(config.CLIENT) {
-			log.Fatalln("Invalid IP ADDRESS")
-		}
 	default:
-		log.Println("COULD NOT READ CONFIG FROM FILE, PARSING CMDLINE ARGS")
-		config.RAW = *p
-		config.COMPRESSION = *z
-		config.SERVER = *s
-		config.CLIENT = *l
-		if !validate(config.SERVER) || !validate(config.CLIENT) {
-			log.Fatalln("INVALID IP ADDRESS")
-		}
+		log.Println("PARSING CMDLINE ARGS")
+		client.SOCKSSERVER = *socksserver
+		client.SOCKSCLIENT = *socksclient
+		client.TCPSERVER = *tcpserver
+		client.TCPCLIENT = *tcpclient
+		client.COMPRESSION = *comp
+		client.RAW = *psk
 	}
-	return config
+	if !validateIP(client.SOCKSSERVER) || !validateIP(client.SOCKSCLIENT) {
+		log.Fatalln("INVALID SOCKS SERVER/CLIENT IP ADDRESS")
+	}
+	if len(client.TCPSERVER) > 0 && !validateIP(client.TCPSERVER) {
+		log.Fatalln("INVALID TCP SERVER ADDRESS")
+	}
+	return client
 }

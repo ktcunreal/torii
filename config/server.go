@@ -11,44 +11,51 @@ import (
 )
 
 type Server struct {
-	RAW         string `json:"key"`
-	SERVER      string `json:"serveraddr"`
+	SOCKSSERVER string `json:"socksserver"`
 	COMPRESSION string `json:"compression"`
+	TCPSERVER   string `json:"tcpserver"`
+	UPSTREAM    string `json:"upstream"`
+	RAW         string `json:"key"`
 }
 
-func LoadServer() *Server {
-	config := &Server{}
-	c := flag.String("c", "./config.json", "Configuration path")
-	p := flag.String("p", "", "Pre-shared Key")
-	s := flag.String("s", "0.0.0.0:8000", "Server address")
-	z := flag.String("z", "snappy", "Use compression")
+func LoadServerConf() *Server {
+	socksserver := flag.String("s", "", "Socks server address")
+	tcpserver := flag.String("t", "", "Tcp server address")
+	upstream := flag.String("u", "", "Upstream address")
+	config := flag.String("c", "./config.json", "Configuration path")
+	comp := flag.String("z", "snappy", "Use compression")
+	psk := flag.String("p", "", "Pre-shared Key")
+
 	flag.Parse()
 
-	file, err := os.Open(*c)
-	log.Printf("LOADING CONFIG FROM %v", *c)
+	file, err := os.Open(*config)
 	defer file.Close()
+	server := &Server{}
 
 	switch err {
 	case nil:
-		if err := json.NewDecoder(file).Decode(config); err != nil {
+		log.Printf("LOADING CONFIG FROM %v", *config)
+		if err := json.NewDecoder(file).Decode(server); err != nil {
 			log.Fatalf("PARSE CONFIG ERROR: %v", err)
 		}
-		if !validate(config.SERVER) {
-			log.Fatalln("Invalid IP ADDRESS")
-		}
 	default:
-		log.Println("COULD NOT READ CONFIG FROM FILE, PARSING CMDLINE ARGS")
-		config.RAW = *p
-		config.COMPRESSION = *z
-		config.SERVER = *s
-		if !validate(config.SERVER) {
-			log.Fatalln("INVALID IP ADDRESS")
-		}
+		log.Println("PARSING CMDLINE ARGS")
+		server.SOCKSSERVER = *socksserver
+		server.TCPSERVER = *tcpserver
+		server.UPSTREAM = *upstream
+		server.COMPRESSION = *comp
+		server.RAW = *psk
 	}
-	return config
+	if !validateIP(server.SOCKSSERVER) {
+		log.Fatalln("INVALID SOCKS SERVER ADDRESS")
+	}
+	if len(server.TCPSERVER) > 0 && !validateIP(server.TCPSERVER) {
+		log.Fatalln("INVALID TCP SERVER ADDRESS")
+	}
+	return server
 }
 
-func validate(s string) bool {
+func validateIP(s string) bool {
 	var ip, port string
 	i := strings.LastIndexByte(s, ':')
 	if i == -1 {

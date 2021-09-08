@@ -21,7 +21,7 @@ func NewProxyServer(conn net.Conn) *ProxyServer {
 	}
 }
 
-func (p *ProxyServer) Forward() {
+func (p *ProxyServer) Connect() {
 	if _, err := io.ReadFull(p.Conn, p.rBuf[:1]); err != nil {
 		log.Printf("UNABLE TO GET DST DOMAIN LENGTH: %v", err)
 		p.Conn.Close()
@@ -45,6 +45,5 @@ func (p *ProxyServer) Forward() {
 		p.Conn.Close()
 		return
 	}
-
 	Pipe(p.Conn, dst)
 }

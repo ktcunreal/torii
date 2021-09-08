@@ -20,7 +20,7 @@ func NewProxyClient(conn net.Conn) *ProxyClient {
 	}
 }
 
-func (p *ProxyClient) Forward(src net.Conn) {
+func (p *ProxyClient) Connect(src net.Conn) {
 	if _, err := io.ReadFull(p.Conn, p.rBuf[:3]); err != nil {
 		log.Printf("UNABLE TO GET SOCKS VERSION: %v", err)
 		p.Conn.Close()

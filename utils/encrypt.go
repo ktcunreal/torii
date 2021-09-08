@@ -24,7 +24,7 @@ func NewKey(s string) *Key {
 	h := SH256R(s)
 	return &Key{
 		hash:   &h,
-		salt:   SH256L(h[:10]),
+		salt:   SH256L(h[:12]),
 		pepper: SH256L(h[20:]),
 	}
 }
@@ -119,43 +119,28 @@ func (e *EncStream) Drop() (int, error) {
 	return 0, errors.New("ILLEGAL CONNECTION")
 }
 
-func Encode(i int, s, p []byte) []byte {
-	r := make([]byte, 4)
-	rand.Read(r)
-
-	enc := make([]byte, 4)
-	binary.LittleEndian.PutUint32(enc, uint32(i))
-
-	tmp := make([]byte, 4)
-	copy(tmp, r)
-	auth := SH256S(append(tmp, s...))
-
-	tmp = make([]byte, 4)
-	copy(tmp, r)
-	mask := SH256S(append(tmp, p...))
-
-	head := append(r, auth...)
-	xorenc := XORBytes(enc, mask)
-
-	return append(head, xorenc...)
+func Encode(i int, salt, pepper []byte) []byte {
+	iBuf, head, hBuf := make([]byte, 4), make([]byte, 12), make([]byte, 36)
+	binary.LittleEndian.PutUint32(iBuf, uint32(i))
+	rand.Read(head[:4])
+	copy(hBuf[:4], head[:4])
+	copy(hBuf[4:], salt)
+	copy(head[4:8], SH256S(hBuf))
+	copy(hBuf[4:], pepper)
+	copy(head[8:], XORBytes(iBuf, SH256S(hBuf)))
+	return head
 }
 
-func Decode(b []byte, s, p []byte) (int, bool) {
-	tmp := make([]byte, 4)
-	copy(tmp, b[:4])
-	auth := SH256S(append(tmp, s...))
-
-	if !bytes.Equal(auth, b[4:8]) {
+func Decode(b []byte, salt, pepper []byte) (int, bool) {
+	hBuf := make([]byte, 36)
+	copy(hBuf[:4], b[:4])
+	copy(hBuf[4:], salt)
+	if !bytes.Equal(SH256S(hBuf), b[4:8]) {
 		return 0, false
 	}
-
-	tmp = make([]byte, 4)
-	copy(tmp, b[:4])
-	mask := SH256S(append(tmp, p...))
-
-	enc := XORBytes(b[8:12], mask)
-	i := int(binary.LittleEndian.Uint32(enc))
-
+	copy(hBuf[4:], pepper)
+	iBuf := XORBytes(b[8:12], SH256S(hBuf))
+	i := int(binary.LittleEndian.Uint32(iBuf))
 	return i, true
 }
 
