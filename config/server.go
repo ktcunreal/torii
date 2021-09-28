@@ -46,12 +46,14 @@ func LoadServerConf() *Server {
 		server.COMPRESSION = *comp
 		server.RAW = *psk
 	}
-	if !validateIP(server.SOCKSSERVER) {
+
+	if len(server.SOCKSSERVER) > 0 && !validateIP(server.SOCKSSERVER) {
 		log.Fatalln("INVALID SOCKS SERVER ADDRESS")
 	}
 	if len(server.TCPSERVER) > 0 && !validateIP(server.TCPSERVER) {
 		log.Fatalln("INVALID TCP SERVER ADDRESS")
 	}
+	
 	return server
 }
 

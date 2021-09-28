@@ -24,7 +24,7 @@ func LoadClientConf() *Client {
 	config := flag.String("c", "./config.json", "Configuration path")
 	comp := flag.String("z", "snappy", "Use compression")
 	psk := flag.String("p", "", "Pre-shared Key")
-
+	
 	flag.Parse()
 
 	file, err := os.Open(*config)
@@ -46,11 +46,16 @@ func LoadClientConf() *Client {
 		client.COMPRESSION = *comp
 		client.RAW = *psk
 	}
-	if !validateIP(client.SOCKSSERVER) || !validateIP(client.SOCKSCLIENT) {
-		log.Fatalln("INVALID SOCKS SERVER/CLIENT IP ADDRESS")
+
+	if len(client.SOCKSCLIENT) > 0 && !validateIP(client.SOCKSCLIENT) {
+		log.Fatalln("INVALID SOCKS CLIENT IP ADDRESS")
+	}
+	if len(client.SOCKSSERVER) > 0 && !validateIP(client.SOCKSSERVER) {
+		log.Fatalln("INVALID SOCKS SERVER IP ADDRESS")
 	}
 	if len(client.TCPSERVER) > 0 && !validateIP(client.TCPSERVER) {
 		log.Fatalln("INVALID TCP SERVER ADDRESS")
 	}
+
 	return client
 }

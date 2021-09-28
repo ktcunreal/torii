@@ -6,20 +6,21 @@ import (
 	"../utils"
 	"log"
 	"net"
+	"sync"
 )
 
 func main() {
 	conf := config.LoadServerConf()
 	key := utils.NewKey(conf.RAW)
-
-	socks := initAddr(conf.SOCKSSERVER)
-	defer socks.Close()
+	wg := sync.WaitGroup{}
 
 	if len(conf.TCPSERVER)*len(conf.UPSTREAM) > 0 {
-		tcp := initAddr(conf.TCPSERVER)
+		tcp := initAddr("TCP SERVER", conf.TCPSERVER)
 		defer tcp.Close()
+		wg.Add(1)
 		go func() {
 			for {
+				defer wg.Done()
 				src, err := tcp.Accept()
 				if err != nil {
 					log.Printf("TCP SERVER FAILED TO ACCEPT CONNECTION: %v", err)
@@ -35,18 +36,28 @@ func main() {
 		}()
 	}
 
-	for {
-		client, err := socks.Accept()
-		if err != nil {
-			log.Printf("SOCKS SERVER FAILED TO ACCEPT CONNECTION: %v", err)
-			continue
-		}
-		go socks5(client, conf, key)
+	if len(conf.SOCKSSERVER) > 0 {
+		socks := initAddr("SOCKS SERVER", conf.SOCKSSERVER)
+		defer socks.Close()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				client, err := socks.Accept()
+				if err != nil {
+					log.Printf("SOCKS SERVER FAILED TO ACCEPT CONNECTION: %v", err)
+					continue
+				}
+				go socks5(client, conf, key)
+			}
+		}()
 	}
+
+	wg.Wait()
 }
 
-func initAddr(addr string) net.Listener {
-	defer log.Printf("LISTENER STARTED ON %v", addr)
+func initAddr(name, addr string) net.Listener {
+	defer log.Printf("%s LISTENER STARTED ON %s", name, addr)
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalln("LISTENER FAILED TO START: ", err)
