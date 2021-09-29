@@ -26,7 +26,7 @@ type Key struct {
 }
 
 func NewKey(s string) *Key {
-	h := SH256R(s)
+	h := sha256.Sum256([]byte(s))
 	return &Key{
 		hash:     &h,
 		salt:     SH256L(h[:12]),
@@ -132,7 +132,7 @@ func Encode(i int, salt, pepper, cinnamon []byte) []byte {
 
 	rand.Read(head[:4])
 
-	copy(hBuf[:4], head[:4])
+	copy(hBuf[:4], SH256S(head[:4]))
 	copy(hBuf[4:], salt)
 	copy(head[4:8], SH256S(hBuf))
 
@@ -151,7 +151,7 @@ func Encode(i int, salt, pepper, cinnamon []byte) []byte {
 func Decode(b, salt, pepper, cinnamon []byte) (int, bool) {
 	hBuf := make([]byte, 36)
 
-	copy(hBuf[:4], b[:4])
+	copy(hBuf[:4], SH256S(b[:4]))
 	copy(hBuf[4:], salt)
 	if !bytes.Equal(b[4:8], SH256S(hBuf)) {
 		return 0, false
@@ -190,16 +190,16 @@ func increment(b *[24]byte) {
 
 func SH256L(b []byte) []byte {
 	s := sha256.Sum256(b)
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
 	return s[:]
 }
 
 func SH256S(b []byte) []byte {
-	s := sha256.Sum256(b)
-	return s[28:]
-}
-
-func SH256R(s string) [32]byte {
-	return sha256.Sum256([]byte(s))
+	s := SH256L(b)
+	s[0], s[1], s[2], s[3] = s[6], s[12], s[18], s[24]
+	return s[:4]
 }
 
 func Abs(i int) int {
