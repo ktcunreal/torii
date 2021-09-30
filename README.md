@@ -70,7 +70,7 @@ or
 }
 ```
 
-By default, Torii reads config.json under current working directory. If config.json does not exist, it will read config from cmdline args. **If both cmdline args and config.json are given, torii will use config.json.**
+On start, Torii will search for *config.json* under current working directory. If *config.json* does not exist, it will read config from cmdline args. **If both cmdline args and config.json are given, torii will use config.json.**
 
 *Use a password consist of alphanumeric and symbol, at least 20 digits in length (Recommended)*
 
