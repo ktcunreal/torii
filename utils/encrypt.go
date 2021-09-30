@@ -42,12 +42,15 @@ type EncStream struct {
 	rNonce, sNonce [24]byte
 }
 
-func NewEncStream(conn net.Conn, psk *Key) *EncStream {
-	return &EncStream{
+func NewEncStream(conn net.Conn, k *Key) *EncStream {
+	e := &EncStream{
 		Conn: conn,
-		key:  psk,
+		key:  k,
 		dBuf: make([]byte, 16),
 	}
+	copy(e.rNonce[:4], SH256S(k.hash[:]))
+	copy(e.sNonce[:4], SH256S(k.hash[:]))
+	return e
 }
 
 func (e *EncStream) Read(b []byte) (int, error) {
@@ -132,7 +135,7 @@ func Encode(i int, salt, pepper, cinnamon []byte) []byte {
 
 	rand.Read(head[:4])
 
-	copy(hBuf[:4], SH256S(head[:4]))
+	copy(hBuf[:4], head[:4])
 	copy(hBuf[4:], salt)
 	copy(head[4:8], SH256S(hBuf))
 
@@ -151,7 +154,7 @@ func Encode(i int, salt, pepper, cinnamon []byte) []byte {
 func Decode(b, salt, pepper, cinnamon []byte) (int, bool) {
 	hBuf := make([]byte, 36)
 
-	copy(hBuf[:4], SH256S(b[:4]))
+	copy(hBuf[:4], b[:4])
 	copy(hBuf[4:], salt)
 	if !bytes.Equal(b[4:8], SH256S(hBuf)) {
 		return 0, false
