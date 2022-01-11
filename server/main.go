@@ -11,7 +11,7 @@ import (
 
 func main() {
 	conf := config.LoadServerConf()
-	key := utils.NewKey(conf.RAW)
+	key := utils.NewKey(conf.PSK)
 	wg := sync.WaitGroup{}
 
 	if len(conf.TCPSERVER)*len(conf.UPSTREAM) > 0 {
@@ -68,7 +68,7 @@ func initAddr(name, addr string) net.Listener {
 func socks5(client net.Conn, conf *config.Server, key *utils.Key) {
 	eStream := utils.NewEncStream(client, key)
 	switch conf.COMPRESSION {
-	case "none":
+	case "":
 		proxy.NewProxyServer(eStream).Connect()
 	case "snappy":
 		cStream := utils.NewSnappyStream(eStream)
@@ -82,7 +82,7 @@ func socks5(client net.Conn, conf *config.Server, key *utils.Key) {
 func forward(src, dst net.Conn, conf *config.Server, key *utils.Key) {
 	eStream := utils.NewEncStream(src, key)
 	switch conf.COMPRESSION {
-	case "none":
+	case "":
 		proxy.Pipe(eStream, dst)
 	case "snappy":
 		cStream := utils.NewSnappyStream(eStream)

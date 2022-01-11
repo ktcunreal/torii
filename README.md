@@ -53,7 +53,7 @@ or
 
 ### Client side
 
-`./client -s "127.0.0.1:1234" -l "0.0.0.0:1080" -t "127.0.0.1:2345" -b ""0.0.0.0:1081" -p "some-long-random-passphrase" -z "snappy"`
+`./client -s "127.0.0.1:1234" -l "0.0.0.0:1080" -t "127.0.0.1:2345" -a "0.0.0.0:1081" -p "some-long-random-passphrase" -z "snappy"`
 
 or
 
@@ -69,8 +69,6 @@ or
     "key": "some-long-random-passphrase"
 }
 ```
-
-Torii will search for *config.json* under current working directory. If *config.json* does not exist, it will read config from cmdline args. **If both cmdline args and config.json are given, torii will use config.json.**
 
 *Use a password consist of alphanumeric and symbol, at least 20 digits in length (Recommended)*
 
