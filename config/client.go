@@ -13,40 +13,54 @@ type Client struct {
 	COMPRESSION string `json:"compression"`
 	TCPSERVER   string `json:"tcpserver"`
 	TCPCLIENT   string `json:"tcpclient"`
-	RAW         string `json:"key"`
+	PSK         string `json:"key"`
 }
 
 func LoadClientConf() *Client {
+	client := &Client{}
+
 	socksserver := flag.String("s", "", "Socks server address")
 	socksclient := flag.String("l", "", "Socks client address")
 	tcpserver := flag.String("t", "", "Tcp server address")
-	tcpclient := flag.String("b", "", "Tcp client address")
-	config := flag.String("c", "./config.json", "Configuration path")
+	tcpclient := flag.String("a", "", "Tcp client address")
+	config := flag.String("c", "", "Configuration path")
 	comp := flag.String("z", "snappy", "Use compression")
 	psk := flag.String("p", "", "Pre-shared Key")
 	
 	flag.Parse()
 
-	file, err := os.Open(*config)
-	defer file.Close()
-	client := &Client{}
-
-	switch err {
-	case nil:
+	if *config != "" {
+		file, err := os.Open(*config)
+		defer file.Close()
 		log.Printf("LOADING CONFIG FROM %v", *config)
+		if err != nil {
+			log.Fatalf("LOADING CONFIG FAILED %v", err)
+		}
 		if err := json.NewDecoder(file).Decode(client); err != nil {
 			log.Fatalf("PARSE CONFIG ERROR: %v", err)
 		}
-	default:
-		log.Println("PARSING CMDLINE ARGS")
-		client.SOCKSSERVER = *socksserver
-		client.SOCKSCLIENT = *socksclient
-		client.TCPSERVER = *tcpserver
-		client.TCPCLIENT = *tcpclient
-		client.COMPRESSION = *comp
-		client.RAW = *psk
 	}
-
+	if *socksserver != "" {
+		client.SOCKSSERVER = *socksserver
+	}
+	if *socksclient != "" {
+		client.SOCKSCLIENT = *socksclient
+	}
+	if *tcpserver != "" {
+		client.TCPSERVER = *tcpserver
+	}
+	if *tcpclient != "" {
+		client.TCPCLIENT = *tcpclient
+	}
+	if *comp != "" {
+		client.COMPRESSION = *comp
+	}
+	if *psk != "" {
+		client.PSK = *psk
+	}
+	if len(client.SOCKSSERVER)*len(client.SOCKSCLIENT) == 0 && len(client.TCPSERVER)*len(client.TCPCLIENT) == 0 {
+		log.Fatalln("INVALID ARGS FOR LISTENING ADDRESS")
+	}
 	if len(client.SOCKSCLIENT) > 0 && !validateIP(client.SOCKSCLIENT) {
 		log.Fatalln("INVALID SOCKS CLIENT IP ADDRESS")
 	}
@@ -56,6 +70,8 @@ func LoadClientConf() *Client {
 	if len(client.TCPSERVER) > 0 && !validateIP(client.TCPSERVER) {
 		log.Fatalln("INVALID TCP SERVER ADDRESS")
 	}
-
+	if len(client.TCPCLIENT) > 0 && !validateIP(client.TCPCLIENT) {
+		log.Fatalln("INVALID TCP CLIENT ADDRESS")
+	}
 	return client
 }
