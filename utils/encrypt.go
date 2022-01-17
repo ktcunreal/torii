@@ -15,23 +15,23 @@ import (
 
 const (
 	Chunk    int = 16384
-	ValidRng int = 180
+	ValidTS int = 180
 )
 
 type Key struct {
 	hash     *[32]byte
-	salt     []byte
-	pepper   []byte
-	cinnamon []byte
+	ksum		[]byte
+	klen		[]byte
+	kuts		[]byte
 }
 
 func NewKey(s string) *Key {
 	h := sha256.Sum256([]byte(s))
 	return &Key{
 		hash:     &h,
-		salt:     SH256L(h[:12]),
-		pepper:   SH256L(h[4:16]),
-		cinnamon: SH256L(h[8:20]),
+		ksum:     SH256L(h[:12]),
+		klen:   SH256L(h[4:16]),
+		kuts: SH256L(h[8:20]),
 	}
 }
 
@@ -64,7 +64,7 @@ func (e *EncStream) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	size, ok := Decode(e.dBuf, e.key.salt, e.key.pepper, e.key.cinnamon)
+	size, ok := Decode(e.dBuf, e.key.ksum, e.key.klen, e.key.kuts)
 	if !ok {
 		log.Println("INVALID CIPHER LENGTH")
 		return e.Drop()
@@ -101,7 +101,7 @@ func (e *EncStream) Write(b []byte) (int, error) {
 		}
 		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.key.hash)
 		increment(&e.sNonce)
-		enc := Encode(len(cipher), e.key.salt, e.key.pepper, e.key.cinnamon)
+		enc := Encode(len(cipher), e.key.ksum, e.key.klen, e.key.kuts)
 		if _, err := e.Conn.Write(enc); err != nil {
 			return sidx, err
 		}
@@ -128,48 +128,50 @@ func (e *EncStream) Drop() (int, error) {
 	return 0, errors.New("ILLEGAL CONNECTION")
 }
 
-func Encode(i int, salt, pepper, cinnamon []byte) []byte {
-	iBuf := make([]byte, 4)
+func Encode(i int, ksum, klen, kuts []byte) []byte {
 	head := make([]byte, 16)
+	iBuf := make([]byte, 4)
 	hBuf := make([]byte, 36)
 
 	rand.Read(head[:4])
-
 	copy(hBuf[:4], head[:4])
-	copy(hBuf[4:], salt)
-	copy(head[4:8], SH256S(hBuf))
 
 	t := time.Now().Unix()
 	binary.LittleEndian.PutUint32(iBuf, uint32(t))
-	copy(hBuf[4:], cinnamon)
-	copy(head[8:12], XORBytes(iBuf, SH256S(hBuf)))
+	copy(hBuf[4:], kuts)
+	copy(head[4:8], XORBytes(iBuf, SH256S(hBuf)))
 
 	binary.LittleEndian.PutUint32(iBuf, uint32(i))
-	copy(hBuf[4:], pepper)
-	copy(head[12:], XORBytes(iBuf, SH256S(hBuf)))
+	copy(hBuf[4:], klen)
+	copy(head[8:12], XORBytes(iBuf, SH256S(hBuf)))
+
+	copy(hBuf[:12], head[:12])
+	copy(hBuf[12:], ksum[8:])
+	copy(head[12:16], SH256S(hBuf))
 
 	return head
 }
 
-func Decode(b, salt, pepper, cinnamon []byte) (int, bool) {
+func Decode(b, ksum, klen, kuts []byte) (int, bool) {
 	hBuf := make([]byte, 36)
-
 	copy(hBuf[:4], b[:4])
-	copy(hBuf[4:], salt)
-	if !bytes.Equal(b[4:8], SH256S(hBuf)) {
-		return 0, false
-	}
 
-	copy(hBuf[4:], cinnamon)
-	iBuf := XORBytes(b[8:12], SH256S(hBuf))
-	if Abs(int(time.Now().Unix())-int(binary.LittleEndian.Uint32(iBuf))) > ValidRng {
+	copy(hBuf[4:], kuts)
+	iBuf := XORBytes(b[4:8], SH256S(hBuf))
+	if Abs(int(time.Now().Unix())-int(binary.LittleEndian.Uint32(iBuf))) > ValidTS {
 		log.Println("EXPIRED TIMESTAMP")
 		return 0, false
 	}
 
-	copy(hBuf[4:], pepper)
-	iBuf = XORBytes(b[12:16], SH256S(hBuf))
+	copy(hBuf[4:], klen)
+	iBuf = XORBytes(b[8:12], SH256S(hBuf))
 	i := int(binary.LittleEndian.Uint32(iBuf))
+
+	copy(hBuf[:12], b[:12])
+	copy(hBuf[12:], ksum[8:])
+	if !bytes.Equal(b[12:16], SH256S(hBuf)) {
+		return 0, false
+	}
 
 	return i, true
 }

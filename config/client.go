@@ -24,7 +24,7 @@ func LoadClientConf() *Client {
 	tcpserver := flag.String("t", "", "Tcp server address")
 	tcpclient := flag.String("a", "", "Tcp client address")
 	config := flag.String("c", "", "Configuration path")
-	comp := flag.String("z", "snappy", "Use compression")
+	comp := flag.String("z", "", "Use compression")
 	psk := flag.String("p", "", "Pre-shared Key")
 	
 	flag.Parse()
