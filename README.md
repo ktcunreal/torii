@@ -6,7 +6,7 @@ A simple, easy-to-use tunnel utility written in go.
 - Lightweight
 - Obfuscate message length
 - Suspend illegal connections to filter active probing
-- Stream compression for better web-browsing experience
+- Support compression for better web-browsing experience
 
 ## Download
 Download binary from [github release page](https://github.com/ktcunreal/torii/releases)
@@ -31,9 +31,9 @@ go build -o client client/main.go
 
 ## Usage
 
-### Server side
+Synchronize the clock on both server and client machines.
 
-#### Example
+### Server
 
 `./server -s "0.0.0.0:1234" -t "0.0.0.0:2345" -u "127.0.0.1:8123" -p "some-long-random-passphrase" -z "snappy"`
 
@@ -51,7 +51,7 @@ or
 }
 ```
 
-### Client side
+### Client
 
 `./client -s "127.0.0.1:1234" -l "0.0.0.0:1080" -t "127.0.0.1:2345" -a "0.0.0.0:1081" -p "some-long-random-passphrase" -z "snappy"`
 
@@ -70,7 +70,7 @@ or
 }
 ```
 
-*Use a password consist of alphanumeric and symbol, at least 20 digits in length (Recommended)*
+*Use a password consist of alphanumeric and symbols, at least 20 digits in length (Recommended)*
 
 ## Reference
 
