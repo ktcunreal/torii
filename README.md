@@ -19,8 +19,9 @@ git clone github.com/ktcunreal/torii
 ``` 
 Install Dependencies:
 ```
-go get -u golang.org/x/crypto/nacl/secretbox 
-go get -u github.com/golang/snappy
+go get golang.org/x/crypto/nacl/secretbox 
+go get github.com/golang/snappy
+go get github.com/andybalholm/brotli
 ```
 
 Build binaries:

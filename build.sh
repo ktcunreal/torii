@@ -1,8 +1,8 @@
 #!/bin/bash
 set -xve
 
-REPO_DIR=/path/to/torii
-RELEASE_DIR=/path/to/torii-release
+REPO_DIR="./"
+RELEASE_DIR="./release"
 DATE=`date +"%Y%m%d"`
 
 # Create sub folder

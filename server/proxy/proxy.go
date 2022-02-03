@@ -23,16 +23,17 @@ func NewProxyServer(conn net.Conn) *ProxyServer {
 
 func (p *ProxyServer) Connect() {
 	if _, err := io.ReadFull(p.Conn, p.rBuf[:1]); err != nil {
-		log.Printf("UNABLE TO GET DST DOMAIN LENGTH: %v", err)
-		p.Conn.Close()
+		log.Printf("%v", err)
+		defer p.Conn.Close()
 		return
 	}
 
 	length := int(p.rBuf[0])
 	buf := make([]byte, length+2)
-	if _, err := io.ReadFull(p.Conn, buf); err != nil {
-		log.Printf("UNABLE TO GET DST DOMAIN NAME: %v", err)
-		p.Conn.Close()
+
+	if n, err := io.ReadFull(p.Conn, buf); err != nil || n != length+2 {
+		log.Printf("ILLEGAL DST: %v", err)
+		defer p.Conn.Close()
 		return
 	}
 
@@ -42,8 +43,22 @@ func (p *ProxyServer) Connect() {
 	dst, err := net.DialTimeout("tcp", addr, time.Second*15)
 	if err != nil {
 		log.Printf("UNABLE TO CONNECT: %s, %v", addr, err)
-		p.Conn.Close()
+		defer p.Conn.Close()
 		return
 	}
+
 	Pipe(p.Conn, dst)
+}
+
+func Pipe(src, dst net.Conn) {
+	go func() {
+		defer src.Close()
+		defer dst.Close()
+		io.Copy(src, dst)
+	}()
+	go func() {
+		defer src.Close()
+		defer dst.Close()
+		io.Copy(dst, src)
+	}()
 }

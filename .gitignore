@@ -1,4 +1,2 @@
-client/client*
 client/config.json
-server/server*
 server/config.json

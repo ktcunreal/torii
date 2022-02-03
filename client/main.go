@@ -1,64 +1,69 @@
 package main
 
 import (
-	"../config"
-	"../proxy"
-	"../utils"
+	"./compress"
+	"./config"
+	"./encrypt"
+	"./proxy"
 	"log"
 	"net"
 	"sync"
 )
 
 func main() {
-	conf := config.LoadClientConf()
-	key := utils.NewKey(conf.PSK)
-	wg := sync.WaitGroup{}
+	client := struct {
+		conf *config.Client
+		wg   sync.WaitGroup
+	}{
+		conf: config.LoadClientConf(),
+		wg:   sync.WaitGroup{},
+	}
 
-	if len(conf.TCPSERVER)*len(conf.TCPCLIENT) > 0 {
-		tcp := initAddr("TCP", conf.TCPCLIENT)
+	if len(client.conf.Tcpserver)*len(client.conf.Tcpclient) > 0 {
+		tcp := initAddr("TCP", client.conf.Tcpclient)
 		defer tcp.Close()
-		wg.Add(1)
+		client.wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer client.wg.Done()
 			for {
 				src, err := tcp.Accept()
 				if err != nil {
-					log.Printf("TCP CLIENT FAILED TO ACCEPT CONNECTION: %v", err)
+					log.Printf("FAILED TO ACCEPT TCP CONNECTION: %v", err)
 					continue
 				}
-				dst, err := net.Dial("tcp", conf.TCPSERVER)
+				dst, err := net.Dial("tcp", client.conf.Tcpserver)
 				if err != nil {
-					log.Println("UNABLE TO CONNECT TCP SERVER")
+					log.Println("TCP SERVER UNREACHABLE")
 					continue
 				}
-				forward(src, dst, conf, key)
+				go forward(src, dst, client.conf)
 			}
 		}()
 	}
 
-	if len(conf.SOCKSSERVER)*len(conf.SOCKSCLIENT) > 0 {	
-		socks := initAddr("SOCKS CLIENT", conf.SOCKSCLIENT)
+	if len(client.conf.Socksserver)*len(client.conf.Socksclient) > 0 {
+		socks := initAddr("SOCKS CLIENT", client.conf.Socksclient)
 		defer socks.Close()
-		wg.Add(1)
-		go func (){
-			defer wg.Done()
+		client.wg.Add(1)
+		go func() {
+			defer client.wg.Done()
 			for {
-				client, err := socks.Accept()
+				src, err := socks.Accept()
 				if err != nil {
-					log.Println("FAILED TO ACCEPT CONNECTION: ", err)
+					log.Println("FAILED TO ACCEPT SOCKS CONNECTION: ", err)
 					continue
 				}
-				server, err := net.Dial("tcp", conf.SOCKSSERVER)
+				dst, err := net.Dial("tcp", client.conf.Socksserver)
 				if err != nil {
-					log.Println("COULD NOT CONNECT TO SERVER: ", err)
+					log.Println("SOCKS SERVER UNREACHABLE: ", err)
 					continue
 				}
-				go socks5(server, client, conf, key)
+				go socks5(dst, src, client.conf)
 			}
 		}()
 	}
 
-	wg.Wait()
+	client.wg.Wait()
 }
 
 func initAddr(name, addr string) net.Listener {
@@ -70,30 +75,30 @@ func initAddr(name, addr string) net.Listener {
 	return listener
 }
 
-func socks5(server, client net.Conn, conf *config.Client, key *utils.Key) {
-	eStream := utils.NewEncStream(server, key)
-	switch conf.COMPRESSION {
-	case "":
-		proxy.NewProxyClient(client).Connect(eStream)
+func socks5(server, client net.Conn, conf *config.Client) {
+	eStream := encrypt.NewEncStreamClient(server, conf.Getkeyring())
+	switch conf.Compression {
 	case "snappy":
-		cStream := utils.NewSnappyStream(eStream)
+		cStream := compress.NewSnappyStream(eStream)
+		proxy.NewProxyClient(client).Connect(cStream)
+	case "brotli":
+		cStream := compress.NewBrotliStream(eStream)
 		proxy.NewProxyClient(client).Connect(cStream)
 	default:
-		cStream := utils.NewSnappyStream(eStream)
-		proxy.NewProxyClient(client).Connect(cStream)
+		proxy.NewProxyClient(client).Connect(eStream)
 	}
 }
 
-func forward(src, dst net.Conn, conf *config.Client, key *utils.Key) {
-	eStream := utils.NewEncStream(dst, key)
-	switch conf.COMPRESSION {
-	case "":
-		proxy.Pipe(src, eStream)
+func forward(src, dst net.Conn, conf *config.Client) {
+	eStream := encrypt.NewEncStreamClient(dst, conf.Getkeyring())
+	switch conf.Compression {
 	case "snappy":
-		cStream := utils.NewSnappyStream(eStream)
+		cStream := compress.NewSnappyStreamClient(eStream)
+		proxy.Pipe(src, cStream)
+	case "brotli":
+		cStream := compress.NewBrotliStream(eStream)
 		proxy.Pipe(src, cStream)
 	default:
-		cStream := utils.NewSnappyStream(eStream)
-		proxy.Pipe(src, cStream)
+		proxy.Pipe(src, eStream)
 	}
 }

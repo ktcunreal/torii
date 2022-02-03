@@ -1,6 +1,7 @@
 package config
 
 import (
+	"../encrypt"
 	"encoding/json"
 	"flag"
 	"log"
@@ -11,25 +12,24 @@ import (
 )
 
 type Server struct {
-	SOCKSSERVER string `json:"socksserver"`
-	COMPRESSION string `json:"compression"`
-	TCPSERVER   string `json:"tcpserver"`
-	UPSTREAM    string `json:"upstream"`
-	PSK         string `json:"key"`
+	Socksserver string `json:"socksserver"`
+	Compression string `json:"compression"`
+	Tcpserver   string `json:"tcpserver"`
+	Upstream    string `json:"upstream"`
+	psk         string `json:"key"`
+	keyring     *encrypt.Keyring
 }
 
 func LoadServerConf() *Server {
-	server := &Server{}
-
 	socksserver := flag.String("s", "", "Socks server address")
 	tcpserver := flag.String("t", "", "Tcp server address")
 	upstream := flag.String("u", "", "Upstream address")
 	config := flag.String("c", "", "Configuration path")
 	comp := flag.String("z", "", "Use compression")
-	psk := flag.String("p", "", "Pre-shared Key")
-
+	psk := flag.String("p", "", "Pre-shared Keyring")
 	flag.Parse()
 
+	server := &Server{}
 	if *config != "" {
 		file, err := os.Open(*config)
 		defer file.Close()
@@ -42,29 +42,30 @@ func LoadServerConf() *Server {
 		}
 	}
 	if *socksserver != "" {
-		server.SOCKSSERVER = *socksserver
+		server.Socksserver = *socksserver
 	}
 	if *tcpserver != "" {
-		server.TCPSERVER = *tcpserver
+		server.Tcpserver = *tcpserver
 	}
 	if *upstream != "" {
-		server.UPSTREAM = *upstream
+		server.Upstream = *upstream
 	}
 	if *comp != "" {
-		server.COMPRESSION = *comp
+		server.Compression = *comp
 	}
 	if *psk != "" {
-		server.PSK = *psk
+		server.psk = *psk
 	}
-	if len(server.SOCKSSERVER) == 0 && len(server.TCPSERVER)*len(server.UPSTREAM) == 0 {
+	if len(server.Socksserver) == 0 && len(server.Tcpserver)*len(server.Upstream) == 0 {
 		log.Fatalln("INVALID ARGS FOR LISTENING ADDRESS")
 	}
-	if len(server.SOCKSSERVER) > 0 && !validateIP(server.SOCKSSERVER) {
+	if len(server.Socksserver) > 0 && !validateIP(server.Socksserver) {
 		log.Fatalln("INVALID SOCKS SERVER ADDRESS")
 	}
-	if len(server.TCPSERVER) > 0 && !validateIP(server.TCPSERVER) {
+	if len(server.Tcpserver) > 0 && !validateIP(server.Tcpserver) {
 		log.Fatalln("INVALID TCP SERVER ADDRESS")
 	}
+
 	return server
 }
 
@@ -82,4 +83,11 @@ func validateIP(s string) bool {
 		return false
 	}
 	return true
+}
+
+func (s *Server) Getkeyring() *encrypt.Keyring {
+	if s.keyring == nil {
+		s.keyring = encrypt.NewKeyring(s.psk)
+	}
+	return s.keyring
 }

@@ -21,35 +21,36 @@ func NewProxyClient(conn net.Conn) *ProxyClient {
 }
 
 func (p *ProxyClient) Connect(src net.Conn) {
-	if _, err := io.ReadFull(p.Conn, p.rBuf[:3]); err != nil {
+	if n, err := io.ReadFull(p.Conn, p.rBuf[:3]); err != nil || n != 3 {
 		log.Printf("UNABLE TO GET SOCKS VERSION: %v", err)
-		p.Conn.Close()
+		defer p.Conn.Close()
 		return
 	}
 
-	if _, err := p.Conn.Write(res[:2]); err != nil {
+	if n, err := p.Conn.Write(res[:2]); err != nil || n != 2 {
 		log.Printf("UNABLE TO SEND RESPONSE: %v", err)
-		p.Conn.Close()
+		defer p.Conn.Close()
 		return
 	}
 
-	if _, err := io.ReadFull(p.Conn, p.rBuf[:4]); err != nil {
-		log.Printf("UNABLE TO READ CLIENT REQUEST: %v", err)
-		p.Conn.Close()
+	if n, err := io.ReadFull(p.Conn, p.rBuf[:4]); err != nil || n != 4 {
+		log.Printf("UNABLE TO GET CLIENT REQUEST: %v", err)
+		defer p.Conn.Close()
 		return
 	}
 
 	if p.rBuf[3] != 0x03 {
 		log.Printf("UNSUPPORTED ATYP")
-		p.Conn.Close()
+		defer p.Conn.Close()
 		return
 	}
 
-	if _, err := p.Conn.Write(res); err != nil {
+	if n, err := p.Conn.Write(res); err != nil || n != 10 {
 		log.Printf("UNABLE TO WRITE RESPONSE: %v", err)
-		p.Conn.Close()
+		defer p.Conn.Close()
 		return
 	}
+	
 	Pipe(p.Conn, src)
 }
 

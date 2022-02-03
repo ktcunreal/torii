@@ -1,4 +1,4 @@
-package utils
+package encrypt
 
 import (
 	"bytes"
@@ -14,71 +14,72 @@ import (
 )
 
 const (
-	Chunk    int = 16384
-	ValidTS int = 180
+	TsRng int = 180
+	Chunk = 16384
 )
 
-type Key struct {
-	hash     *[32]byte
-	ksum		[]byte
-	klen		[]byte
-	kuts		[]byte
+type Keyring struct {
+	p    *[32]byte
+	keys [][]byte
 }
 
-func NewKey(s string) *Key {
-	h := sha256.Sum256([]byte(s))
-	return &Key{
-		hash:     &h,
-		ksum:     SH256L(h[:12]),
-		klen:   SH256L(h[4:16]),
-		kuts: SH256L(h[8:20]),
+func NewKeyring(s string) *Keyring {
+	b := SH256L([]byte(s))
+	pw := sha256.Sum256(b)
+	k := make([][]byte, 6)
+	for i, _ := range k {
+		k[i] = SH256L(b[(3 * i):(12 + 3*i)])
+	}
+	return &Keyring{
+		keys: k,
+		p:    &pw,
 	}
 }
 
-type EncStream struct {
+type EncStreamClient struct {
 	net.Conn
-	key            *Key
+	keyring        *Keyring
 	rBuf, dBuf     []byte
 	rNonce, sNonce [24]byte
 }
 
-func NewEncStream(conn net.Conn, k *Key) *EncStream {
-	e := &EncStream{
-		Conn: conn,
-		key:  k,
-		dBuf: make([]byte, 16),
+func NewEncStreamClient(conn net.Conn, k *Keyring) *EncStreamClient {
+	e := &EncStreamClient{
+		Conn:    conn,
+		keyring: k,
+		dBuf:    make([]byte, 8),
 	}
-	copy(e.rNonce[:4], SH256S(k.hash[:]))
-	copy(e.sNonce[:4], SH256S(k.hash[:]))
+	copy(e.rNonce[:8], k.keys[3][:8])
+	copy(e.sNonce[:8], k.keys[3][24:])
 	return e
 }
 
-func (e *EncStream) Read(b []byte) (int, error) {
+func (e *EncStreamClient) Read(b []byte) (int, error) {
 	if len(e.rBuf) > 0 {
 		n := copy(b, e.rBuf)
 		e.rBuf = e.rBuf[n:]
 		return n, nil
 	}
 
-	if n, err := io.ReadFull(e.Conn, e.dBuf); err != nil || n != 16 {
+	if n, err := io.ReadFull(e.Conn, e.dBuf); err != nil || n != 8 {
 		return 0, err
 	}
 
-	size, ok := Decode(e.dBuf, e.key.ksum, e.key.klen, e.key.kuts)
+	size, ok := ClientDecode(e.dBuf, e.keyring.keys)
 	if !ok {
-		log.Println("INVALID CIPHER LENGTH")
+		log.Println("INVALID PACKET RECEIVED")
 		return e.Drop()
 	}
 
 	c := make([]byte, size)
 	if _, err := io.ReadFull(e.Conn, c); err != nil {
-		log.Println("ERROR READING CIPHER")
+		log.Printf("%v", err)
 		return 0, err
 	}
 
-	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.key.hash)
+	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.keyring.p)
 	if !ok {
-		log.Println("DECRYPT FAILED")
+		log.Println("DECRYPTION FAILED")
 		return e.Drop()
 	}
 	increment(&e.rNonce)
@@ -91,17 +92,17 @@ func (e *EncStream) Read(b []byte) (int, error) {
 	return n, nil
 }
 
-func (e *EncStream) Write(b []byte) (int, error) {
-	sidx, eidx := 0, 0
+func (e *EncStreamClient) Write(b []byte) (int, error) {
+	sidx, eidx, chnk := 0, 0, Chunk
 	for ; sidx < len(b); sidx = eidx {
-		if len(b)-eidx >= Chunk {
-			eidx += Chunk
+		if len(b)-eidx >= chnk {
+			eidx += chnk
 		} else {
 			eidx = len(b)
 		}
-		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.key.hash)
+		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.keyring.p)
 		increment(&e.sNonce)
-		enc := Encode(len(cipher), e.key.ksum, e.key.klen, e.key.kuts)
+		enc := ClientEncode(len(cipher), e.keyring.keys)
 		if _, err := e.Conn.Write(enc); err != nil {
 			return sidx, err
 		}
@@ -112,11 +113,11 @@ func (e *EncStream) Write(b []byte) (int, error) {
 	return sidx, nil
 }
 
-func (e *EncStream) Close() error {
+func (e *EncStreamClient) Close() error {
 	return e.Conn.Close()
 }
 
-func (e *EncStream) Drop() (int, error) {
+func (e *EncStreamClient) Drop() (int, error) {
 	defer e.Conn.Close()
 	trap := make([]byte, 16)
 	for {
@@ -125,10 +126,10 @@ func (e *EncStream) Drop() (int, error) {
 			break
 		}
 	}
-	return 0, errors.New("ILLEGAL CONNECTION")
+	return 0, errors.New("ILLEGAL CONNECTION CLOSED")
 }
 
-func Encode(i int, ksum, klen, kuts []byte) []byte {
+func ClientEncode(i int, keys [][]byte) []byte {
 	head := make([]byte, 16)
 	iBuf := make([]byte, 4)
 	hBuf := make([]byte, 36)
@@ -138,42 +139,37 @@ func Encode(i int, ksum, klen, kuts []byte) []byte {
 
 	t := time.Now().Unix()
 	binary.LittleEndian.PutUint32(iBuf, uint32(t))
-	copy(hBuf[4:], kuts)
+	copy(hBuf[4:], keys[2])
 	copy(head[4:8], XORBytes(iBuf, SH256S(hBuf)))
 
 	binary.LittleEndian.PutUint32(iBuf, uint32(i))
-	copy(hBuf[4:], klen)
+	copy(hBuf[4:], keys[1])
 	copy(head[8:12], XORBytes(iBuf, SH256S(hBuf)))
 
 	copy(hBuf[:12], head[:12])
-	copy(hBuf[12:], ksum[8:])
+	copy(hBuf[12:], keys[0][:24])
 	copy(head[12:16], SH256S(hBuf))
 
 	return head
 }
 
-func Decode(b, ksum, klen, kuts []byte) (int, bool) {
+func ClientDecode(b []byte, keys [][]byte) (int, bool) {
 	hBuf := make([]byte, 36)
-	copy(hBuf[:4], b[:4])
+	copy(hBuf[:2], b[:2])
 
-	copy(hBuf[4:], kuts)
-	iBuf := XORBytes(b[4:8], SH256S(hBuf))
-	if Abs(int(time.Now().Unix())-int(binary.LittleEndian.Uint32(iBuf))) > ValidTS {
-		log.Println("EXPIRED TIMESTAMP")
-		return 0, false
-	}
-
-	copy(hBuf[4:], klen)
-	iBuf = XORBytes(b[8:12], SH256S(hBuf))
+	copy(hBuf[4:], keys[4])
+	iBuf := XORBytes(b[2:6], SH256S(hBuf))
 	i := int(binary.LittleEndian.Uint32(iBuf))
 
-	copy(hBuf[:12], b[:12])
-	copy(hBuf[12:], ksum[8:])
-	if !bytes.Equal(b[12:16], SH256S(hBuf)) {
+	copy(hBuf[:6], b[:6])
+	copy(hBuf[6:], keys[5])
+
+	if !bytes.Equal(b[6:8], SH256SS(hBuf)) {
 		return 0, false
 	}
 
 	return i, true
+
 }
 
 func XORBytes(a, b []byte) []byte {
@@ -203,8 +199,12 @@ func SH256L(b []byte) []byte {
 
 func SH256S(b []byte) []byte {
 	s := SH256L(b)
-	s[0], s[1], s[2], s[3] = s[6], s[12], s[18], s[24]
-	return s[:4]
+	return s[16:20]
+}
+
+func SH256SS(b []byte) []byte {
+	s := SH256L(b)
+	return s[22:24]
 }
 
 func Abs(i int) int {
