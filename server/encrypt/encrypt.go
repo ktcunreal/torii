@@ -216,11 +216,5 @@ func Abs(i int) int {
 
 func Chunk() int {
 	mr.Seed(time.Now().UnixNano())
-	c, x := 16384, mr.Intn(512)
-	if mr.Intn(2) == 0 {
-		c += x
-	} else {
-		c -= x
-	}
-	return c
+	return 16384 - mr.Intn(8192)
 }
