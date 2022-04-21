@@ -24,15 +24,18 @@ type Keyring struct {
 }
 
 func NewKeyring(s string) *Keyring {
-	b := SH256L([]byte(s))
-	pw := sha256.Sum256(b)
+	base := SH256L([]byte(s))
 	k := make([][]byte, 6)
+
 	for i, _ := range k {
-		k[i] = SH256L(b[(3 * i):(12 + 3*i)])
+		base[i]++
+		k[i] = SH256L(base)
 	}
+	secret := sha256.Sum256(k[0])
+	
 	return &Keyring{
 		keys: k,
-		p:    &pw,
+		p:    &secret,
 	}
 }
 
@@ -134,16 +137,12 @@ func ServerEncode(i int, keys [][]byte) []byte {
 	iBuf := make([]byte, 4)
 	hBuf := make([]byte, 36)
 
-	rand.Read(head[:2])
-	copy(hBuf[:2], head[:2])
+	rand.Read(head[:4])
+	copy(hBuf[:4], head[:4])
 
 	binary.LittleEndian.PutUint32(iBuf, uint32(i))
 	copy(hBuf[4:], keys[4])
-	copy(head[2:6], XORBytes(iBuf, SH256S(hBuf)))
-
-	copy(hBuf[:6], head[:6])
-	copy(hBuf[6:], keys[5])
-	copy(head[6:8], SH256SS(hBuf))
+	copy(head[4:8], XORBytes(iBuf, SH256S(hBuf)))
 
 	return head
 }
@@ -159,12 +158,13 @@ func ServerDecode(b []byte, keys [][]byte) (int, bool) {
 		return 0, false
 	}
 
-	copy(hBuf[4:], keys[1])
+	copy(hBuf[4:8], b[4:8])
+	copy(hBuf[8:], keys[1][4:])
 	iBuf = XORBytes(b[8:12], SH256S(hBuf))
 	i := int(binary.LittleEndian.Uint32(iBuf))
 
 	copy(hBuf[:12], b[:12])
-	copy(hBuf[12:], keys[0][:24])
+	copy(hBuf[12:], keys[5][:24])
 	if !bytes.Equal(b[12:16], SH256S(hBuf)) {
 		return 0, false
 	}
@@ -200,11 +200,6 @@ func SH256L(b []byte) []byte {
 func SH256S(b []byte) []byte {
 	s := SH256L(b)
 	return s[16:20]
-}
-
-func SH256SS(b []byte) []byte {
-	s := SH256L(b)
-	return s[22:24]
 }
 
 func Abs(i int) int {

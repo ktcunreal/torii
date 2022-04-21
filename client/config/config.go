@@ -17,7 +17,7 @@ type Client struct {
 	Compression string `json:"compression"`
 	Tcpserver   string `json:"tcpserver"`
 	Tcpclient   string `json:"tcpclient"`
-	psk         string `json:"key"`
+	Psk         string `json:"key"`
 	keyring     *encrypt.Keyring
 }
 
@@ -28,7 +28,7 @@ func LoadClientConf() *Client {
 	tcpclient := flag.String("a", "", "Tcp client address")
 	config := flag.String("c", "", "Configuration path")
 	comp := flag.String("z", "", "Use compression")
-	psk := flag.String("p", "", "Pre-shared Keyring")
+	Psk := flag.String("p", "", "Pre-shared Keyring")
 	flag.Parse()
 
 	client := &Client{}
@@ -59,8 +59,8 @@ func LoadClientConf() *Client {
 	if *comp != "" {
 		client.Compression = *comp
 	}
-	if *psk != "" {
-		client.psk = *psk
+	if *Psk != "" {
+		client.Psk = *Psk
 	}
 	if len(client.Socksserver)*len(client.Socksclient) == 0 && len(client.Tcpserver)*len(client.Tcpclient) == 0 {
 		log.Fatalln("INVALID ARGS FOR LISTENING ADDRESS")
@@ -99,7 +99,7 @@ func validateIP(s string) bool {
 
 func (c *Client) Getkeyring() *encrypt.Keyring {
 	if c.keyring == nil {
-		c.keyring = encrypt.NewKeyring(c.psk)
+		c.keyring = encrypt.NewKeyring(c.Psk)
 	}
 	return c.keyring
 }

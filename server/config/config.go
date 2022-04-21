@@ -16,7 +16,7 @@ type Server struct {
 	Compression string `json:"compression"`
 	Tcpserver   string `json:"tcpserver"`
 	Upstream    string `json:"upstream"`
-	psk         string `json:"key"`
+	Psk         string `json:"key"`
 	keyring     *encrypt.Keyring
 }
 
@@ -26,7 +26,7 @@ func LoadServerConf() *Server {
 	upstream := flag.String("u", "", "Upstream address")
 	config := flag.String("c", "", "Configuration path")
 	comp := flag.String("z", "", "Use compression")
-	psk := flag.String("p", "", "Pre-shared Keyring")
+	Psk := flag.String("p", "", "Pre-shared Keyring")
 	flag.Parse()
 
 	server := &Server{}
@@ -53,8 +53,8 @@ func LoadServerConf() *Server {
 	if *comp != "" {
 		server.Compression = *comp
 	}
-	if *psk != "" {
-		server.psk = *psk
+	if *Psk != "" {
+		server.Psk = *Psk
 	}
 	if len(server.Socksserver) == 0 && len(server.Tcpserver)*len(server.Upstream) == 0 {
 		log.Fatalln("INVALID ARGS FOR LISTENING ADDRESS")
@@ -87,7 +87,7 @@ func validateIP(s string) bool {
 
 func (s *Server) Getkeyring() *encrypt.Keyring {
 	if s.keyring == nil {
-		s.keyring = encrypt.NewKeyring(s.psk)
+		s.keyring = encrypt.NewKeyring(s.Psk)
 	}
 	return s.keyring
 }
