@@ -12,7 +12,7 @@ A simple, easy-to-use tunnel utility written in go.
 Download binary from [github release page](https://github.com/ktcunreal/torii/releases)
 
 ## Build from source
-*on Linux / Windows x86_64, Go 1.13.3 or newer*
+*Tested on Linux / Windows x86_64, Go 1.13.3 or newer*
 
 ```
 git clone github.com/ktcunreal/torii
@@ -38,9 +38,7 @@ Synchronize the clock on both server and client machines.
 
 `./server -s "0.0.0.0:1234" -t "0.0.0.0:2345" -u "127.0.0.1:8123" -p "some-long-random-passphrase" -z "snappy"`
 
-or
-
-`./server -c /path/to/config.json`
+or `./server -c /path/to/config.json`
 
 ```
 {
@@ -56,9 +54,7 @@ or
 
 `./client -s "127.0.0.1:1234" -l "0.0.0.0:1080" -t "127.0.0.1:2345" -a "0.0.0.0:1081" -p "some-long-random-passphrase" -z "snappy"`
 
-or
-
-`./client -c /path/to/config.json`
+or `./client -c /path/to/config.json`
 
 ```
 {
@@ -69,6 +65,17 @@ or
     "compression": "snappy",
     "key": "some-long-random-passphrase"
 }
+```
+
+### Docker
+
+Run as server e.g.
+```
+docker run -d -p 8080:8080 ktcunreal/torii server_linux_amd64 -s 0.0.0.0:8080 -p yourpassword -z snappy
+```
+Run as client e.g.
+```
+docker run -d -p 8443:8443 ktcunrea/torii client_linux_amd64 -s yourserverip:8080 -l 0.0.0.0:8443 -p yourpassword -z snappy
 ```
 
 *Use a password consist of alphanumeric and symbols, at least 20 digits in length (Recommended)*
