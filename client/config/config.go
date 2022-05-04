@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -62,20 +63,25 @@ func LoadClientConf() *Client {
 	if *Psk != "" {
 		client.Psk = *Psk
 	}
+
 	if len(client.Socksserver)*len(client.Socksclient) == 0 && len(client.Tcpserver)*len(client.Tcpclient) == 0 {
 		log.Fatalln("INVALID ARGS FOR LISTENING ADDRESS")
 	}
 	if len(client.Socksclient) > 0 && !validateIP(client.Socksclient) {
 		log.Fatalln("INVALID SOCKS CLIENT IP ADDRESS")
 	}
-	if len(client.Socksserver) > 0 && !validateIP(client.Socksserver) {
-		log.Fatalln("INVALID SOCKS SERVER IP ADDRESS")
-	}
-	if len(client.Tcpserver) > 0 && !validateIP(client.Tcpserver) {
-		log.Fatalln("INVALID TCP SERVER ADDRESS")
-	}
 	if len(client.Tcpclient) > 0 && !validateIP(client.Tcpclient) {
 		log.Fatalln("INVALID TCP CLIENT ADDRESS")
+	}
+	if len(client.Socksserver) > 0 {
+		if !validateIP(client.Socksserver) && !validateDomain(client.Socksserver) {
+			log.Fatalln("INVALID SOCKS SERVER ADDRESS")
+		}
+	}
+	if len(client.Tcpserver) > 0 {
+		if !validateIP(client.Tcpserver) && !validateDomain(client.Tcpserver) {
+			log.Fatalln("INVALID TCP SERVER ADDRESS")
+		}
 	}
 
 	return client
@@ -95,6 +101,15 @@ func validateIP(s string) bool {
 		return false
 	}
 	return true
+}
+
+func validateDomain(s string) bool {
+	RegExp := regexp.MustCompile(`^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1})|([a-zA-Z0-9][a-zA-Z0-9-_]{1,61}[a-zA-Z0-9]))\.([a-zA-Z]{2,6}|[a-zA-Z0-9-]{2,30}\.[a-zA-Z
+ ]{2,3})$`)
+	if RegExp.MatchString(s) {
+		return true
+	}
+	return false
 }
 
 func (c *Client) Getkeyring() *encrypt.Keyring {
