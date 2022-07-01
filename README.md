@@ -71,11 +71,11 @@ or `./client -c /path/to/config.json`
 
 Run as server e.g.
 ```
-docker run -d -p 8080:8080 ktcunreal/torii server_linux_amd64 -s 0.0.0.0:8080 -p yourpassword -z snappy
+docker run -d --net=host ktcunreal/torii server_linux_amd64 -s 0.0.0.0:8080 -p yourpassword -z snappy
 ```
 Run as client e.g.
 ```
-docker run -d -p 8443:8443 ktcunrea/torii client_linux_amd64 -s yourserverip:8080 -l 0.0.0.0:8443 -p yourpassword -z snappy
+docker run -d --net=host ktcunreal/torii client_linux_amd64 -s yourserverip:8080 -l 0.0.0.0:8443 -p yourpassword -z snappy
 ```
 
 *Use a password consist of alphanumeric and symbols, at least 20 digits in length (Recommended)*
