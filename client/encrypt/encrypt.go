@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	TsRng int = 180
+//	TsRng int = 180
 	Chunk = 16384
 )
 
@@ -70,7 +70,7 @@ func (e *EncStreamClient) Read(b []byte) (int, error) {
 	size, ok := ClientDecode(e.dBuf, e.keyring.keys)
 	if !ok {
 		log.Println("INVALID PACKET RECEIVED")
-		return e.Drop()
+		return 0, errors.New("Decode failed")
 	}
 
 	c := make([]byte, size)
@@ -81,8 +81,7 @@ func (e *EncStreamClient) Read(b []byte) (int, error) {
 
 	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.keyring.p)
 	if !ok {
-		log.Println("DECRYPTION FAILED")
-		return e.Drop()
+		return 0, errors.New("Decryption Failed")
 	}
 	increment(&e.rNonce)
 

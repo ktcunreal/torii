@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	TsRng int = 180
+	TsRng int = 240
 )
 
 type Keyring struct {
