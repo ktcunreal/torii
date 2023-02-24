@@ -10,15 +10,10 @@ import (
 	"log"
 	"net"
 	"time"
-)
-
-const (
-	Chunk = 16384
+	mr "math/rand"
 )
 
 type Keyring struct {
-	p    *[32]byte
-	keys [][]byte
 	k_cipher *[32]byte
 	k_nonce []byte
 	k_client []byte
@@ -29,20 +24,19 @@ type Keyring struct {
 }
 
 func NewKeyring(s string) *Keyring {
-	base := SH256L([]byte(s))
-	k := make([][]byte, 6)
-
-	for i, _ := range k {
-		base[i]++
-		k[i] = SH256L(base)
-	}
-
-	secret := sha256.Sum256(k[0])
-
+	k_nonce := SH256L([]byte("k_nonce_" + s))
+	k_client := SH256L([]byte("k_client_" + s))
+	k_server := SH256L([]byte("k_server_" + s))
+	k_timestamp := SH256L([]byte("k_timestamp_" + s))
+	k_chksum := SH256L([]byte("k_chksum_" + s))
+	k_cipher := sha256.Sum256([]byte("k_cipher_" + s))
 	return &Keyring{
-		keys: k,
-		p:    &secret,
-		k_cipher: &secret,
+		k_nonce: k_nonce,
+		k_client: k_client,
+		k_server: k_server,
+		k_timestamp: k_timestamp,
+		k_chksum: 	k_chksum,
+		k_cipher: &k_cipher,
 	}
 }
 
@@ -53,14 +47,14 @@ type EncStreamClient struct {
 	rNonce, sNonce [24]byte
 }
 
-func NewEncStreamClient(conn net.Conn, k *Keyring) *EncStreamClient {
+func NewEncStreamClient(conn net.Conn, keys *Keyring) *EncStreamClient {
 	e := &EncStreamClient{
 		Conn:    conn,
-		keyring: k,
+		keyring: keys,
 		dBuf:    make([]byte, 8),
 	}
-	copy(e.rNonce[:8], k.keys[3][:8])
-	copy(e.sNonce[:8], k.keys[3][24:])
+	copy(e.rNonce[:8], keys.k_nonce[:8])
+	copy(e.sNonce[:8], keys.k_nonce[24:])
 	return e
 }
 
@@ -75,7 +69,7 @@ func (e *EncStreamClient) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	size, ok := ClientDecode(e.dBuf, e.keyring.keys)
+	size, ok := ClientDecode(e.dBuf, e.keyring)
 	if !ok {
 		log.Println("INVALID PACKET RECEIVED")
 		return 0, errors.New("Decode failed")
@@ -102,7 +96,7 @@ func (e *EncStreamClient) Read(b []byte) (int, error) {
 }
 
 func (e *EncStreamClient) Write(b []byte) (int, error) {
-	sidx, eidx, chnk := 0, 0, Chunk
+	sidx, eidx, chnk := 0, 0, Chunk()
 	for ; sidx < len(b); sidx = eidx {
 		if len(b)-eidx >= chnk {
 			eidx += chnk
@@ -111,11 +105,8 @@ func (e *EncStreamClient) Write(b []byte) (int, error) {
 		}
 		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.keyring.k_cipher)
 		increment(&e.sNonce)
-		enc := ClientEncode(len(cipher), e.keyring.keys)
-		if _, err := e.Conn.Write(enc); err != nil {
-			return sidx, err
-		}
-		if _, err := e.Conn.Write(cipher); err != nil {
+		enc := ClientEncode(len(cipher), e.keyring)
+		if _, err := e.Conn.Write(append(enc, cipher...)); err != nil {
 			return sidx, err
 		}
 	}
@@ -138,7 +129,7 @@ func (e *EncStreamClient) Drop() (int, error) {
 	return 0, errors.New("ILLEGAL CONNECTION CLOSED")
 }
 
-func ClientEncode(i int, keys [][]byte) []byte {
+func ClientEncode(i int, keys *Keyring) []byte {
 	head := make([]byte, 16)
 	iBuf := make([]byte, 4)
 	hBuf := make([]byte, 36)
@@ -148,26 +139,26 @@ func ClientEncode(i int, keys [][]byte) []byte {
 
 	t := time.Now().Unix()
 	binary.LittleEndian.PutUint32(iBuf, uint32(t))
-	copy(hBuf[4:], keys[2])
+	copy(hBuf[4:], keys.k_timestamp)
 	copy(head[4:8], XORBytes(iBuf, SH256S(hBuf)))
 
 	binary.LittleEndian.PutUint32(iBuf, uint32(i))
 	copy(hBuf[4:8], head[4:8])
-	copy(hBuf[8:], keys[1][4:])
+	copy(hBuf[8:], keys.k_client[4:])
 	copy(head[8:12], XORBytes(iBuf, SH256S(hBuf)))
 
 	copy(hBuf[:12], head[:12])
-	copy(hBuf[12:], keys[5][:24])
+	copy(hBuf[12:], keys.k_chksum[:24])
 	copy(head[12:16], SH256S(hBuf))
 
 	return head
 }
 
-func ClientDecode(b []byte, keys [][]byte) (int, bool) {
+func ClientDecode(b []byte, keys *Keyring) (int, bool) {
 	hBuf := make([]byte, 36)
 	copy(hBuf[:4], b[:4])
 
-	copy(hBuf[4:], keys[4])
+	copy(hBuf[4:], keys.k_server)
 	iBuf := XORBytes(b[4:8], SH256S(hBuf))
 	i := int(binary.LittleEndian.Uint32(iBuf))
 
@@ -206,4 +197,9 @@ func Abs(i int) int {
 		return -i
 	}
 	return i
+}
+
+func Chunk() int {
+	mr.Seed(time.Now().UnixNano())
+	return 20480 - mr.Intn(10240)
 }

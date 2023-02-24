@@ -15,27 +15,33 @@ import (
 )
 
 const (
-	TsRng int = 240
+	TsRng int = 300
 )
 
 type Keyring struct {
-	p    *[32]byte
-	keys [][]byte
+	k_cipher *[32]byte
+	k_nonce []byte
+	k_client []byte
+	k_server []byte
+	k_timestamp []byte
+	k_packet_len []byte
+	k_chksum []byte
 }
 
 func NewKeyring(s string) *Keyring {
-	base := SH256L([]byte(s))
-	k := make([][]byte, 6)
-
-	for i, _ := range k {
-		base[i]++
-		k[i] = SH256L(base)
-	}
-	secret := sha256.Sum256(k[0])
-	
+	k_nonce := SH256L([]byte("k_nonce_" + s))
+	k_client := SH256L([]byte("k_client_" + s))
+	k_server := SH256L([]byte("k_server_" + s))
+	k_timestamp := SH256L([]byte("k_timestamp_" + s))
+	k_chksum := SH256L([]byte("k_chksum_" + s))
+	k_cipher := sha256.Sum256([]byte("k_cipher_" + s))
 	return &Keyring{
-		keys: k,
-		p:    &secret,
+		k_nonce: k_nonce,
+		k_client: k_client,
+		k_server: k_server,
+		k_timestamp: k_timestamp,
+		k_chksum: 	k_chksum,
+		k_cipher: &k_cipher,
 	}
 }
 
@@ -46,14 +52,14 @@ type EncStreamServer struct {
 	rNonce, sNonce [24]byte
 }
 
-func NewEncStreamServer(conn net.Conn, k *Keyring) *EncStreamServer {
+func NewEncStreamServer(conn net.Conn, keys *Keyring) *EncStreamServer {
 	e := &EncStreamServer{
 		Conn:    conn,
-		keyring: k,
+		keyring: keys,
 		dBuf:    make([]byte, 16),
 	}
-	copy(e.rNonce[:8], k.keys[3][24:])
-	copy(e.sNonce[:8], k.keys[3][:8])
+	copy(e.rNonce[:8], keys.k_nonce[24:])
+	copy(e.sNonce[:8], keys.k_nonce[:8])
 	return e
 }
 
@@ -68,7 +74,7 @@ func (e *EncStreamServer) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	size, ok := ServerDecode(e.dBuf, e.keyring.keys)
+	size, ok := ServerDecode(e.dBuf, e.keyring)
 	if !ok {
 		log.Println("INVALID PACKET RECEIVED")
 		return e.Drop()
@@ -80,7 +86,7 @@ func (e *EncStreamServer) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.keyring.p)
+	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.keyring.k_cipher)
 	if !ok {
 		log.Println("DECRYPTION FAILED")
 		return e.Drop()
@@ -103,13 +109,10 @@ func (e *EncStreamServer) Write(b []byte) (int, error) {
 		} else {
 			eidx = len(b)
 		}
-		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.keyring.p)
+		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.keyring.k_cipher)
 		increment(&e.sNonce)
-		enc := ServerEncode(len(cipher), e.keyring.keys)
-		if _, err := e.Conn.Write(enc); err != nil {
-			return sidx, err
-		}
-		if _, err := e.Conn.Write(cipher); err != nil {
+		enc := ServerEncode(len(cipher), e.keyring)
+		if _, err := e.Conn.Write(append(enc, cipher...)); err != nil {
 			return sidx, err
 		}
 	}
@@ -132,7 +135,7 @@ func (e *EncStreamServer) Drop() (int, error) {
 	return 0, errors.New("ILLEGAL CONNECTION CLOSED")
 }
 
-func ServerEncode(i int, keys [][]byte) []byte {
+func ServerEncode(i int, keys *Keyring) []byte {
 	head := make([]byte, 8)
 	iBuf := make([]byte, 4)
 	hBuf := make([]byte, 36)
@@ -141,17 +144,17 @@ func ServerEncode(i int, keys [][]byte) []byte {
 	copy(hBuf[:4], head[:4])
 
 	binary.LittleEndian.PutUint32(iBuf, uint32(i))
-	copy(hBuf[4:], keys[4])
+	copy(hBuf[4:], keys.k_server)
 	copy(head[4:8], XORBytes(iBuf, SH256S(hBuf)))
 
 	return head
 }
 
-func ServerDecode(b []byte, keys [][]byte) (int, bool) {
+func ServerDecode(b []byte, keys *Keyring) (int, bool) {
 	hBuf := make([]byte, 36)
 	copy(hBuf[:4], b[:4])
 
-	copy(hBuf[4:], keys[2])
+	copy(hBuf[4:], keys.k_timestamp)
 	iBuf := XORBytes(b[4:8], SH256S(hBuf))
 	if Abs(int(time.Now().Unix())-int(binary.LittleEndian.Uint32(iBuf))) > TsRng {
 		log.Println("INCORRECT TIMESTAMP")
@@ -159,12 +162,12 @@ func ServerDecode(b []byte, keys [][]byte) (int, bool) {
 	}
 
 	copy(hBuf[4:8], b[4:8])
-	copy(hBuf[8:], keys[1][4:])
+	copy(hBuf[8:], keys.k_client[4:])
 	iBuf = XORBytes(b[8:12], SH256S(hBuf))
 	i := int(binary.LittleEndian.Uint32(iBuf))
 
 	copy(hBuf[:12], b[:12])
-	copy(hBuf[12:], keys[5][:24])
+	copy(hBuf[12:], keys.k_chksum[:24])
 	if !bytes.Equal(b[12:16], SH256S(hBuf)) {
 		return 0, false
 	}
@@ -208,5 +211,5 @@ func Abs(i int) int {
 
 func Chunk() int {
 	mr.Seed(time.Now().UnixNano())
-	return 16384 - mr.Intn(8192)
+	return 20480 - mr.Intn(10240)
 }
