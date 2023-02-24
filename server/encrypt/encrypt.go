@@ -191,9 +191,6 @@ func increment(b *[24]byte) {
 
 func SH256L(b []byte) []byte {
 	s := sha256.Sum256(b)
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
-	}
 	return s[:]
 }
 

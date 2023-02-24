@@ -13,13 +13,19 @@ import (
 )
 
 const (
-//	TsRng int = 180
 	Chunk = 16384
 )
 
 type Keyring struct {
 	p    *[32]byte
 	keys [][]byte
+	k_cipher *[32]byte
+	k_nonce []byte
+	k_client []byte
+	k_server []byte
+	k_timestamp []byte
+	k_packet_len []byte
+	k_chksum []byte
 }
 
 func NewKeyring(s string) *Keyring {
@@ -30,11 +36,13 @@ func NewKeyring(s string) *Keyring {
 		base[i]++
 		k[i] = SH256L(base)
 	}
+
 	secret := sha256.Sum256(k[0])
 
 	return &Keyring{
 		keys: k,
 		p:    &secret,
+		k_cipher: &secret,
 	}
 }
 
@@ -79,7 +87,7 @@ func (e *EncStreamClient) Read(b []byte) (int, error) {
 		return 0, err
 	}
 
-	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.keyring.p)
+	p, ok := secretbox.Open(nil, c[:size], &e.rNonce, e.keyring.k_cipher)
 	if !ok {
 		return 0, errors.New("Decryption Failed")
 	}
@@ -101,7 +109,7 @@ func (e *EncStreamClient) Write(b []byte) (int, error) {
 		} else {
 			eidx = len(b)
 		}
-		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.keyring.p)
+		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.keyring.k_cipher)
 		increment(&e.sNonce)
 		enc := ClientEncode(len(cipher), e.keyring.keys)
 		if _, err := e.Conn.Write(enc); err != nil {
@@ -185,9 +193,6 @@ func increment(b *[24]byte) {
 
 func SH256L(b []byte) []byte {
 	s := sha256.Sum256(b)
-	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
-		s[i], s[j] = s[j], s[i]
-	}
 	return s[:]
 }
 
