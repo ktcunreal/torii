@@ -111,8 +111,14 @@ func (e *EncStreamServer) Write(b []byte) (int, error) {
 		}
 		cipher := secretbox.Seal([]byte{}, b[sidx:eidx], &e.sNonce, e.keyring.k_cipher)
 		increment(&e.sNonce)
-		enc := ServerEncode(len(cipher), e.keyring)
-		if _, err := e.Conn.Write(append(enc, cipher...)); err != nil {
+
+		enc_header := ServerEncode(len(cipher), e.keyring)
+		enc_buf := make([]byte, len(enc_header) + len(cipher))
+		
+		copy(enc_buf[:len(enc_header)], enc_header)
+		copy(enc_buf[len(enc_header):], cipher)
+
+		if _, err := e.Conn.Write(enc_buf); err != nil {
 			return sidx, err
 		}
 	}
@@ -211,5 +217,5 @@ func Abs(i int) int {
 
 func Chunk() int {
 	mr.Seed(time.Now().UnixNano())
-	return 20480 - mr.Intn(10240)
+	return 16384 - mr.Intn(4096)
 }
